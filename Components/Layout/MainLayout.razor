@@ -1,0 +1,127 @@
+﻿@inherits LayoutComponentBase
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject AuthService AuthService
+@inject NavigationManager NavManager
+
+<div class="app-wrapper">
+    <nav class="sidebar hidden-on-mobile">
+        <div class="sidebar-header">
+            <h2 class="brand-title">SmartArena</h2>
+            <p class="brand-subtitle">Панель управления</p>
+        </div>
+
+        <ul class="nav-menu">
+            <li>
+                <NavLink href="/overview" class="nav-link" Match="NavLinkMatch.All">
+                    <i class="fa-solid fa-chart-line nav-icon"></i> <span>Обзор</span>
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="/map" class="nav-link">
+                    <i class="fa-solid fa-map nav-icon"></i> <span>Карта</span>
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="/tasks" class="nav-link">
+                    <i class="fa-solid fa-check-square nav-icon"></i> <span>Задачи</span>
+                </NavLink>
+            </li>
+            <li>
+                <NavLink href="/chat" class="nav-link">
+                    <i class="fa-solid fa-comments nav-icon"></i> <span>Сообщения</span>
+                </NavLink>
+            </li>
+            @if (CanManageUsers)
+            {
+                <li>
+                    <NavLink href="/staff" class="nav-link">
+                        <i class="fa-solid fa-users nav-icon"></i> <span>Сотрудники</span>
+                    </NavLink>
+                </li>
+            }
+            @if (CanManageSettings)
+            {
+                <li>
+                    <NavLink href="/roles" class="nav-link">
+                        <i class="fa-solid fa-user-shield nav-icon"></i> <span>Роли и права</span>
+                    </NavLink>
+                </li>
+            }
+        </ul>
+
+        <div class="sidebar-profile" @onclick='() => NavManager.NavigateTo("/profile")'>
+            <div class="avatar">@UserInitials</div>
+            <div class="profile-info">
+                <span class="profile-name">@UserName</span>
+                <span class="profile-role">@UserRole</span>
+            </div>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <div @key="NavManager.Uri" class="page-transition-wrapper">
+            @Body
+        </div>
+    </main>
+
+    <nav class="mobile-bottom-bar visible-on-mobile">
+        <NavLink href="/overview" class="bottom-link" Match="NavLinkMatch.All">
+            <i class="fa-solid fa-chart-line"></i>
+        </NavLink>
+        <NavLink href="/map" class="bottom-link">
+            <i class="fa-solid fa-map"></i>
+        </NavLink>
+        <NavLink href="/tasks" class="bottom-link">
+            <i class="fa-solid fa-check"></i>
+        </NavLink>
+        <NavLink href="/chat" class="bottom-link">
+            <i class="fa-solid fa-comments"></i>
+        </NavLink>
+        <NavLink href="/profile" class="bottom-link">
+            <i class="fa-solid fa-user"></i>
+        </NavLink>
+    </nav>
+</div>
+
+<CustomAlert />
+
+@code {
+    private string UserName = "Загрузка...";
+    private string UserRole = "...";
+    private string UserInitials = "--";
+    private bool CanManageUsers = false;
+    private bool CanManageSettings = false;
+
+    // Эта логика полностью заменяет метод LoadUserData() из MainViewModel.cs
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await AuthService.GetCurrentUserProfileWithRoleAsync();
+
+        if (data.Profile != null)
+        {
+            UserName = !string.IsNullOrEmpty(data.Profile.FullName)
+                       ? data.Profile.FullName
+                       : (AuthService.CurrentUser?.Email ?? "Пользователь");
+
+            UserRole = data.RoleName;
+
+            if (!string.IsNullOrEmpty(UserName))
+            {
+                var parts = UserName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length > 1)
+                    UserInitials = $"{parts[0][0]}{parts[1][0]}".ToUpper();
+                else
+                    UserInitials = UserName.Substring(0, Math.Min(2, UserName.Length)).ToUpper();
+            }
+        }
+        else
+        {
+            UserName = "Ошибка загрузки";
+            UserRole = "Гость";
+        }
+
+        CanManageUsers = await AuthService.UserHasPermissionAsync("user.manage");
+        CanManageSettings = await AuthService.UserHasPermissionAsync("settings.manage");
+    }
+}

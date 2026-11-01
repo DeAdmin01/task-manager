@@ -1,0 +1,80 @@
+﻿/* Базовые стили (Темная тема по умолчанию) */
+.container-404 {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100%;
+    text-align: center;
+    color: #ffffff;
+    padding: 20px;
+    box-sizing: border-box;
+    /* Убедись, что глобальный фон страницы темный, иначе белый текст сольется */
+    background-color: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(2px);
+}
+
+.error-number {
+    font-size: 10rem;
+    font-weight: 900;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    color: #FFFFFF;
+    font-family: monospace;
+    text-shadow: 0 0 15px rgba(255, 255, 255, 1), 0 0 30px rgba(255, 255, 255, 0.9), 0 5px 25px rgba(0, 0, 0, 0.8), 10px 10px 0 rgba(255, 255, 255, 0.95), 0 0 80px rgba(255, 255, 255, 0.4);
+}
+
+.error-heading {
+    font-size: 2rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+.error-message {
+    font-size: 1.2rem;
+    margin-bottom: 2rem;
+}
+
+.primary-button {
+    text-decoration: none;
+    display: inline-block;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    padding: 10px 20px;
+    margin-top: 15px;
+    min-width: 200px;
+    border: 2px solid #FFFFFF !important;
+    color: #FFFFFF;
+    transition: box-shadow 0.3s ease-in-out, background-color 0.3s ease-in-out, color 0.3s ease-in-out;
+}
+
+    .primary-button:hover {
+        box-shadow: 0 0 15px rgba(255, 255, 255, 1), 0 0 30px rgba(255, 255, 255, 0.5), 0 5px 25px rgba(0, 0, 0, 0.8), 0 0 80px rgba(255, 255, 255, 0.4);
+        background-color: rgba(255, 255, 255, 0.1);
+        color: #FFFFFF;
+    }
+
+/* Стили для светлой темы */
+@media (prefers-color-scheme: light) {
+    .container-404 {
+        color: #000000;
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .error-number {
+        color: #000000;
+        /* Инвертируем тени: белое свечение становится черным, а темные тени — белыми */
+        text-shadow: 0 0 15px rgba(0, 0, 0, 1), 0 0 30px rgba(0, 0, 0, 0.9), 0 5px 25px rgba(255, 255, 255, 0.8), 10px 10px 0 rgba(0, 0, 0, 0.95), 0 0 80px rgba(0, 0, 0, 0.4);
+    }
+
+    .primary-button {
+        border: 2px solid #000000 !important;
+        color: #000000;
+    }
+
+        .primary-button:hover {
+            box-shadow: 0 0 15px rgba(0, 0, 0, 1), 0 0 30px rgba(0, 0, 0, 0.5), 0 5px 25px rgba(255, 255, 255, 0.8), 0 0 80px rgba(0, 0, 0, 0.4);
+            background-color: rgba(0, 0, 0, 0.1);
+            color: #000000;
+        }
+}

@@ -1,0 +1,462 @@
+﻿@page "/map"
+@using SmartArena.Models
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject SupabaseService SupabaseService
+@inject AuthService AuthService
+@inject IAlertService AlertService
+
+<div class="map-page-container">
+    <div class="page-header">
+        <h1>Карта стадиона</h1>
+        @if (CanManage)
+        {
+            <div class="header-actions">
+                <button class="btn-primary" @onclick="() => OpenZoneModal()">
+                    <i class="fa-solid fa-plus"></i> Новая зона
+                </button>
+                <button class="btn-outline" @onclick="() => OpenTypeModal()">
+                    <i class="fa-solid fa-tags"></i> Настройка типов
+                </button>
+            </div>
+        }
+    </div>
+
+    <div class="search-wrapper">
+        <i class="fa-solid fa-search"></i>
+        <input type="text" placeholder="Поиск зоны по названию..." @bind="SearchText" @bind:event="oninput" />
+    </div>
+
+    <div class="table-scroll-container">
+        <div class="table-card">
+            <table class="smart-table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Тип</th>
+                        <th>Вместимость</th>
+                        <th>Родительская зона</th>
+                        @if (CanManage)
+                        {
+                            <th style="width: 100px;">Действия</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in VisibleTreeZones)
+                    {
+                        var zone = item.Zone;
+                        var type = ZoneTypes.FirstOrDefault(t => t.Id == zone.TypeId);
+                        var parent = Zones.FirstOrDefault(z => z.Id == zone.ParentZoneId);
+
+                        <tr>
+                            <td>
+                                <div class="zone-name-cell" style="padding-left: @(item.Level * 28)px;">
+                                    @if (item.HasChildren)
+                                    {
+                                        <button class="btn-expand" @onclick="() => ToggleZone(zone.Id)">
+                                            <i class="fa-solid fa-chevron-right @(item.IsExpanded ? "open" : "")"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <div class="expand-spacer"></div>
+                                    }
+
+                                    <i class="fa-solid fa-location-dot" style="color: var(--teal);"></i>
+                                    <span>@zone.Name</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge-type @(string.IsNullOrEmpty(type?.Description) ? "" : "has-tooltip")">
+                                    @(type?.Name ?? "—")
+                                    @if (!string.IsNullOrEmpty(type?.Description))
+                                    {
+                                        <span class="tooltip-text">@type.Description</span>
+                                    }
+                                </span>
+                            </td>
+                            <td>@(zone.Capacity > 0 ? zone.Capacity : "—")</td>
+                            <td style="color: gray; font-size: 13px;">@(parent?.Name ?? "—")</td>
+                            @if (CanManage)
+                            {
+                                <td>
+                                    <button class="btn-icon" @onclick="() => OpenZoneModal(zone)">
+                                        <i class="fa-solid fa-pen"></i>
+                                    </button>
+                                    <button class="btn-icon danger" @onclick="() => DeleteZone(zone.Id)">
+                                        <i class="fa-solid fa-trash"></i>
+                                    </button>
+                                </td>
+                            }
+                        </tr>
+                    }
+                    @if (!VisibleTreeZones.Any())
+                    {
+                        <tr>
+                            <td colspan="5" style="text-align: center; color: gray; padding: 20px;">Зоны не найдены</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@* --- Модальное окно ЗОНЫ --- *@
+@if (IsZoneModalOpen)
+{
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">@(EditingZone.Id == Guid.Empty ? "Создать зону" : "Редактировать зону")</h3>
+
+            <div class="input-field">
+                <label>Название зоны</label>
+                <div class="input-wrapper">
+                    <input type="text" @bind="EditingZone.Name" placeholder="Напр: Сектор A1" />
+                </div>
+            </div>
+
+            <div class="row-inputs">
+                <div class="input-field">
+                    <label>Тип зоны</label>
+                    <div class="custom-select">
+                        <div class="select-selected" @onclick="() => { IsTypeDropdownOpen = !IsTypeDropdownOpen; IsParentDropdownOpen = false; }">
+                            <span>@(EditingZone.TypeId.HasValue ? ZoneTypes.FirstOrDefault(t => t.Id == EditingZone.TypeId)?.Name : "Выберите тип...")</span>
+                            <i class="fa-solid fa-chevron-down @(IsTypeDropdownOpen ? "open" : "")"></i>
+                        </div>
+                        @if (IsTypeDropdownOpen)
+                        {
+                            <div class="select-items">
+                                <div class="select-item" @onclick="() => SelectZoneType(null)">Без типа</div>
+                                @foreach (var t in ZoneTypes)
+                                {
+                                    <div class="select-item" @onclick="() => SelectZoneType(t.Id)">@t.Name</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+
+                <div class="input-field">
+                    <label>Вместимость</label>
+                    <div class="input-wrapper">
+                        <input type="number" @bind="EditingZone.Capacity" min="0" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="input-field">
+                <label>Родительская зона (Иерархия)</label>
+                <div class="custom-select">
+                    <div class="select-selected" @onclick="() => { IsParentDropdownOpen = !IsParentDropdownOpen; IsTypeDropdownOpen = false; ParentZoneSearchText = string.Empty; }">
+                        <span>@(SelectedParentId.HasValue ? Zones.FirstOrDefault(z => z.Id == SelectedParentId)?.Name : "Корень стадиона")</span>
+                        <i class="fa-solid fa-chevron-down @(IsParentDropdownOpen ? "open" : "")"></i>
+                    </div>
+                    @if (IsParentDropdownOpen)
+                    {
+                        <div class="select-items with-search">
+                            <div class="select-search-box" @onclick:stopPropagation>
+                                <i class="fa-solid fa-search" style="color: var(--teal);"></i>
+                                <input type="text" placeholder="Найти зону..." @bind="ParentZoneSearchText" @bind:event="oninput" />
+                            </div>
+
+                            <div class="select-options-list">
+                                <div class="select-item" @onclick="() => SelectParentZone(null)">Корень стадиона</div>
+                                @foreach (var z in FilteredParentZones)
+                                {
+                                    <div class="select-item" @onclick="() => SelectParentZone(z.Id)">@z.Name</div>
+                                }
+                                @if (!FilteredParentZones.Any())
+                                {
+                                    <div class="select-item" style="color: gray; text-align: center; cursor: default;">Не найдено</div>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsZoneModalOpen = false">Отмена</button>
+                <button class="btn-confirm" @onclick="SaveZone">Сохранить</button>
+            </div>
+        </div>
+    </div>
+}
+
+@* --- Модальное окно ТИПОВ ЗОН --- *@
+@if (IsTypeModalOpen)
+{
+    // ... HTML модального окна типов остается без изменений ...
+    <div class="modal-overlay">
+        <div class="modal-card wide">
+            <h3 class="modal-title">Управление типами зон</h3>
+
+            <div class="type-editor-grid">
+                <div class="type-list-side">
+                    @foreach (var t in ZoneTypes)
+                    {
+                        <div class="type-item @(EditingType.Id == t.Id ? "active" : "")" @onclick="() => EditingType = t">
+                            <span>@t.Name</span>
+                            <button class="btn-icon mini" @onclick:stopPropagation @onclick="() => DeleteType(t.Id)">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                    }
+                    <button class="btn-add-type" @onclick="PrepareNewType">+ Добавить новый</button>
+                </div>
+
+                <div class="type-form-side">
+                    <div class="input-field">
+                        <label>Название типа</label>
+                        <input type="text" @bind="EditingType.Name" class="smart-input" placeholder="Напр: Трибуна" />
+                    </div>
+                    <div class="input-field" style="flex-grow: 1;">
+                        <label>Описание</label>
+                        <textarea @bind="EditingType.Description" class="smart-input" rows="3" style="height: 100%; resize: none;"></textarea>
+                    </div>
+                    <button class="btn-confirm btn-save-type" @onclick="SaveType">Сохранить тип</button>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" style="width: 100%;" @onclick="() => IsTypeModalOpen = false">Закрыть</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<StadiumZone> Zones = new();
+    private List<ZoneType> ZoneTypes = new();
+    private bool CanManage = false;
+
+    // --- НОВОЕ: Для дерева зон ---
+    private HashSet<Guid> ExpandedZoneIds = new();
+
+    private IEnumerable<TreeZoneItem> VisibleTreeZones
+    {
+        get
+        {
+            var result = new List<TreeZoneItem>();
+
+            if (!string.IsNullOrWhiteSpace(SearchText))
+            {
+                // Режим поиска: показываем просто плоский список совпадений
+                foreach (var z in Zones.Where(z => z.Name.Contains(SearchText, StringComparison.OrdinalIgnoreCase)))
+                {
+                    result.Add(new TreeZoneItem { Zone = z, Level = 0, HasChildren = false });
+                }
+            }
+            else
+            {
+                // Режим дерева: начинаем с корневых элементов (у которых нет родителя)
+                var roots = Zones.Where(z => z.ParentZoneId == null).OrderBy(z => z.Name);
+                foreach (var root in roots)
+                {
+                    BuildTree(root, 0, result);
+                }
+            }
+
+            return result;
+        }
+    }
+
+    private void BuildTree(StadiumZone currentZone, int level, List<TreeZoneItem> list)
+    {
+        var children = Zones.Where(z => z.ParentZoneId == currentZone.Id).OrderBy(z => z.Name).ToList();
+        bool isExpanded = ExpandedZoneIds.Contains(currentZone.Id);
+
+        // Добавляем саму зону
+        list.Add(new TreeZoneItem
+        {
+            Zone = currentZone,
+            Level = level,
+            HasChildren = children.Any(),
+            IsExpanded = isExpanded
+        });
+
+        // Если она раскрыта, рекурсивно добавляем детей
+        if (isExpanded)
+        {
+            foreach (var child in children)
+            {
+                BuildTree(child, level + 1, list);
+            }
+        }
+    }
+
+    private void ToggleZone(Guid zoneId)
+    {
+        if (ExpandedZoneIds.Contains(zoneId))
+            ExpandedZoneIds.Remove(zoneId);
+        else
+            ExpandedZoneIds.Add(zoneId);
+    }
+    // ---------------------------------
+
+    // Поиск
+    private string SearchText = "";
+    private string ParentZoneSearchText = "";
+    private IEnumerable<StadiumZone> FilteredParentZones => string.IsNullOrWhiteSpace(ParentZoneSearchText)
+        ? Zones.Where(z => z.Id != EditingZone.Id)
+        : Zones.Where(z => z.Id != EditingZone.Id && z.Name.Contains(ParentZoneSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsZoneModalOpen;
+    private StadiumZone EditingZone = new();
+    private Guid? SelectedParentId;
+
+    private bool IsTypeDropdownOpen = false;
+    private bool IsParentDropdownOpen = false;
+
+    private bool IsTypeModalOpen;
+    private ZoneType EditingType = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        bool hasSettingsManage = await AuthService.UserHasPermissionAsync("settings.manage");
+        bool hasZonesManage = await AuthService.UserHasPermissionAsync("zones.manage");
+        CanManage = hasSettingsManage || hasZonesManage;
+
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var zoneRes = await SupabaseService.Client.From<StadiumZone>().Get();
+        Zones = zoneRes.Models.OrderBy(z => z.Name).ToList();
+
+        var typeRes = await SupabaseService.Client.From<ZoneType>().Get();
+        ZoneTypes = typeRes.Models.OrderBy(t => t.Id).ToList();
+    }
+
+    // --- Логика ЗОН ---
+    private void OpenZoneModal(StadiumZone? zone = null)
+    {
+        EditingZone = zone ?? new StadiumZone();
+        SelectedParentId = EditingZone.ParentZoneId;
+
+        IsTypeDropdownOpen = false;
+        IsParentDropdownOpen = false;
+        IsZoneModalOpen = true;
+    }
+
+    private void SelectZoneType(int? typeId)
+    {
+        EditingZone.TypeId = typeId;
+        IsTypeDropdownOpen = false;
+    }
+
+    private void SelectParentZone(Guid? parentId)
+    {
+        SelectedParentId = parentId;
+        IsParentDropdownOpen = false;
+    }
+
+    private async Task SaveZone()
+    {
+        if (string.IsNullOrWhiteSpace(EditingZone.Name))
+        {
+            await AlertService.ShowAlertAsync("Внимание", "Укажите название зоны", "OK");
+            return;
+        }
+
+        EditingZone.ParentZoneId = SelectedParentId;
+
+        try
+        {
+            if (EditingZone.Id == Guid.Empty)
+                await SupabaseService.Client.From<StadiumZone>().Insert(EditingZone);
+            else
+                await SupabaseService.Client.From<StadiumZone>().Update(EditingZone);
+
+            // Если мы добавили зону в родителя, автоматически раскрываем его, чтобы пользователь увидел результат
+            if (SelectedParentId.HasValue)
+            {
+                ExpandedZoneIds.Add(SelectedParentId.Value);
+            }
+
+            IsZoneModalOpen = false;
+            await LoadData();
+        }
+        catch (Exception ex) { await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK"); }
+    }
+
+    private async Task DeleteZone(Guid id)
+    {
+        int descendantsCount = GetDescendantsCount(id);
+        string message = descendantsCount > 0
+            ? $"Вы уверены, что хотите удалить эту зону? Вместе с ней будут безвозвратно удалены все вложенные зоны (количество: {descendantsCount})."
+            : "Вы уверены, что хотите удалить эту зону?";
+
+        bool confirm = await AlertService.ShowAlertAsync("Удаление зоны", message, "Удалить", "Отмена");
+        if (confirm)
+        {
+            try
+            {
+                await SupabaseService.Client.From<StadiumZone>().Where(z => z.Id == id).Delete();
+                await LoadData();
+            }
+            catch (Exception ex) { await AlertService.ShowAlertAsync("Ошибка", $"Не удалось удалить зону: {ex.Message}", "OK"); }
+        }
+    }
+
+    private int GetDescendantsCount(Guid parentId)
+    {
+        var directChildren = Zones.Where(z => z.ParentZoneId == parentId).ToList();
+        int count = directChildren.Count;
+        foreach (var child in directChildren) count += GetDescendantsCount(child.Id);
+        return count;
+    }
+
+    // --- Логика ТИПОВ ---
+    private void OpenTypeModal()
+    {
+        PrepareNewType();
+        IsTypeModalOpen = true;
+    }
+
+    private void PrepareNewType() => EditingType = new ZoneType();
+
+    private async Task SaveType()
+    {
+        if (string.IsNullOrWhiteSpace(EditingType.Name)) return;
+
+        if (EditingType.Id == 0)
+            await SupabaseService.Client.From<ZoneType>().Insert(EditingType);
+        else
+            await SupabaseService.Client.From<ZoneType>().Update(EditingType);
+
+        await LoadData();
+        PrepareNewType();
+    }
+
+    private async Task DeleteType(int id)
+    {
+        int usedCount = Zones.Count(z => z.TypeId == id);
+        string message = usedCount > 0
+            ? $"Этот тип сейчас используется в зонах (количество: {usedCount}). При удалении эти зоны получат статус 'Без типа'. Вы уверены, что хотите удалить его?"
+            : "Вы уверены, что хотите удалить этот тип?";
+
+        bool confirm = await AlertService.ShowAlertAsync("Удаление типа", message, "Удалить", "Отмена");
+        if (confirm)
+        {
+            try
+            {
+                await SupabaseService.Client.From<ZoneType>().Where(t => t.Id == id).Delete();
+                await LoadData();
+            }
+            catch (Exception ex) { await AlertService.ShowAlertAsync("Ошибка", $"Не удалось удалить тип: {ex.Message}", "OK"); }
+        }
+    }
+
+    // Вспомогательный класс для отрисовки дерева
+    private class TreeZoneItem
+    {
+        public StadiumZone Zone { get; set; } = new();
+        public int Level { get; set; }
+        public bool HasChildren { get; set; }
+        public bool IsExpanded { get; set; }
+    }
+}

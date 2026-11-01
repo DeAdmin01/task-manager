@@ -1,0 +1,139 @@
+﻿@page "/profile/edit"
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@using System.Text.RegularExpressions
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+
+<div class="page-header with-back">
+    <button class="btn-back" @onclick='() => NavManager.NavigateTo("/profile")'>
+        <i class="fa-solid fa-arrow-left"></i>
+    </button>
+    <h1>Настройки</h1>
+</div>
+
+<div class="edit-profile-container">
+    <div class="edit-section">
+        <h3 class="section-title">Личные данные</h3>
+        <div class="input-field">
+            <label>ФИО</label>
+            <div class="input-wrapper">
+                <input type="text" @bind="FullName" placeholder="Введите ваше имя" />
+            </div>
+        </div>
+    </div>
+
+    <div class="edit-section">
+        <h3 class="section-title">Безопасность</h3>
+        <div class="input-field">
+            <label>Email</label>
+            <div class="input-wrapper">
+                <input type="email" @bind="Email" placeholder="Email" />
+            </div>
+        </div>
+
+        <div class="input-field">
+            <label>Новый пароль</label>
+            <div class="input-wrapper">
+                <input type="password" @bind="NewPassword" placeholder="Оставьте пустым, если не меняете" />
+            </div>
+        </div>
+    </div>
+
+    <button class="btn-save" @onclick="SaveChanges" disabled="@IsBusy">
+        @if (IsBusy)
+        {
+            <span>Сохранение...</span>
+        }
+        else
+        {
+
+            <span>Сохранить изменения</span>
+        }
+    </button>
+</div>
+
+@code {
+    private string FullName = "";
+    private string Email = "";
+    private string NewPassword = "";
+    private bool IsBusy;
+
+    private string _originalFullName = "";
+    private string _originalEmail = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        IsBusy = true;
+        var authUser = AuthService.CurrentUser;
+        Email = authUser?.Email ?? "";
+        _originalEmail = Email;
+
+        var profileData = await AuthService.GetCurrentUserProfileWithRoleAsync();
+        if (profileData.Profile != null)
+        {
+            FullName = profileData.Profile.FullName ?? "";
+            _originalFullName = FullName;
+        }
+        IsBusy = false;
+    }
+
+    private async Task SaveChanges()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+
+        try
+        {
+            var userId = AuthService.CurrentUser?.Id;
+            if (string.IsNullOrEmpty(userId)) return;
+
+            bool nameChanged = FullName != _originalFullName;
+            bool emailChanged = !string.IsNullOrEmpty(Email) && Email != _originalEmail;
+            bool passChanged = !string.IsNullOrWhiteSpace(NewPassword);
+
+            if (!nameChanged && !emailChanged && !passChanged)
+            {
+                NavManager.NavigateTo("/profile");
+                return;
+            }
+
+            // 1. Обновляем Имя
+            if (nameChanged)
+            {
+                await AuthService.UpdateProfileDataAsync(userId, FullName);
+            }
+
+            // 2. Обновляем Auth (Email / Пароль)
+            if (emailChanged || passChanged)
+            {
+                if (emailChanged)
+                {
+                    bool confirm = await AlertService.ShowAlertAsync("Смена почты",
+                        "Нужно будет подтвердить новый адрес. Продолжить?", "Да", "Отмена");
+                    if (!confirm) { IsBusy = false; return; }
+                }
+
+                if (passChanged && !IsPasswordValid(NewPassword))
+                {
+                    await AlertService.ShowAlertAsync("Ошибка", "Пароль слишком простой", "OK");
+                    IsBusy = false; return;
+                }
+
+                await AuthService.UpdateAuthDataAsync(emailChanged ? Email : null, passChanged ? NewPassword : null);
+            }
+
+            await AlertService.ShowAlertAsync("Успех", "Данные обновлены. Перезапустите приложение для применения всех изменений.", "OK");
+            NavManager.NavigateTo("/profile");
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+        }
+        finally { IsBusy = false; }
+    }
+
+    private bool IsPasswordValid(string pw) =>
+        !string.IsNullOrEmpty(pw) && pw.Length >= 8 && pw.Any(char.IsUpper) && pw.Any(char.IsDigit) && pw.Any(c => !char.IsLetterOrDigit(c));
+}

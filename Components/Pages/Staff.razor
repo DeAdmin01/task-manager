@@ -1,0 +1,254 @@
+﻿@page "/staff"
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@using SmartArena.Models
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+
+<div class="page-header">
+    <h1>Управление персоналом</h1>
+    <p class="subtitle" style="text-align: left;">Назначение ролей и блокировка учетных записей</p>
+</div>
+
+@if (IsLoading)
+{
+    <div class="loading-spinner">Загрузка данных...</div>
+}
+else
+{
+    <div class="search-container">
+        <div class="input-wrapper search-box large">
+            <i class="fa-solid fa-magnifying-glass"></i>
+            <input type="text" placeholder="Поиск сотрудника по имени..." @bind="SearchText" @bind:event="oninput" />
+        </div>
+    </div>
+
+    <div class="content-card staff-card">
+        <div class="table-responsive">
+            <table class="staff-table">
+                <thead>
+                    <tr>
+                        <th>Сотрудник</th>
+                        <th>Роль</th>
+                        <th>Статус</th>
+                        <th>Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var emp in FilteredEmployees)
+                    {
+                        <tr>
+                            <td>
+                                <div class="employee-info">
+                                    <div class="avatar small">@emp.Initials</div>
+                                    <span class="emp-name">@emp.FullName</span>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="role-badge">@emp.RoleName</span>
+                            </td>
+                            <td>
+                                @if (emp.IsActive)
+                                {
+                                    <span class="status-badge active"><i class="fa-solid fa-check"></i> Активен</span>
+                                }
+                                else
+                                {
+                                    <span class="status-badge inactive"><i class="fa-solid fa-ban"></i> Заблокирован</span>
+                                }
+                            </td>
+                            <td>
+                                <button class="btn-icon" @onclick="() => OpenEditModal(emp)" title="Редактировать">
+                                    <i class="fa-solid fa-pen-to-square"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@if (EditingEmployee != null)
+{
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">Редактирование сотрудника</h3>
+            
+            <div class="employee-info-large">
+                <div class="avatar">@EditingEmployee.Initials</div>
+                <div class="details">
+                    <div class="name">@EditingEmployee.FullName</div>
+                    <div class="id-hint">ID: @EditingEmployee.Id.Substring(0, 8)...</div>
+                </div>
+            </div>
+
+            <div class="input-field">
+                <label>Назначить роль</label>
+                <div class="custom-select" @onclick="() => IsRoleDropdownOpen = !IsRoleDropdownOpen">
+                    <div class="select-selected">
+                        @if (AvailableRoles.Any(r => r.Id == EditRoleId))
+                        {
+                            <span>@AvailableRoles.First(r => r.Id == EditRoleId).Name</span>
+                        }
+                        <i class="fa-solid fa-chevron-down @(IsRoleDropdownOpen ? "open" : "")"></i>
+                    </div>
+                    @if (IsRoleDropdownOpen)
+                    {
+                        <div class="select-items">
+                            @foreach (var role in AvailableRoles)
+                            {
+                                <div class="select-item" @onclick="() => SelectRole(role.Id)">@role.Name</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="toggle-field">
+                <label class="toggle-container">
+                    <input type="checkbox" @bind="EditIsActive" disabled="@(EditingEmployee.Id == CurrentUserId)" />
+                    <span class="checkmark"></span>
+                    <span class="toggle-text">Активная учетная запись</span>
+                </label>
+                @if (EditingEmployee.Id == CurrentUserId)
+                {
+                    <small class="hint-text">Вы не можете заблокировать сами себя.</small>
+                }
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="CloseEditModal">Отмена</button>
+                <button class="btn-confirm" @onclick="SaveEmployeeChanges" disabled="@IsSaving">
+                    @(IsSaving ? "Сохранение..." : "Сохранить")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool IsLoading = true;
+    private bool IsSaving = false;
+    private string CurrentUserId = "";
+    private string SearchText = "";
+
+    private List<EmployeeDto> Employees = new();
+    private List<UserRole> AvailableRoles = new();
+
+    private EmployeeDto? EditingEmployee = null;
+    private int? EditRoleId;
+    private bool EditIsActive;
+    
+    // Переменная для кастомного селектора
+    private bool IsRoleDropdownOpen = false;
+
+    private IEnumerable<EmployeeDto> FilteredEmployees =>
+        string.IsNullOrWhiteSpace(SearchText)
+            ? Employees
+            : Employees.Where(e => e.FullName.Contains(SearchText, StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        bool canManage = await AuthService.UserHasPermissionAsync("user.manage");
+        if (!canManage)
+        {
+            NavManager.NavigateTo("/overview");
+            return;
+        }
+
+        CurrentUserId = AuthService.CurrentUser?.Id ?? "";
+        await LoadDataAsync();
+    }
+
+    private async Task LoadDataAsync()
+    {
+        IsLoading = true;
+        AvailableRoles = await AuthService.GetAllRolesAsync();
+        var profiles = await AuthService.GetAllProfilesAsync();
+
+        Employees = profiles.Select(p => new EmployeeDto
+        {
+            Id = p.Id,
+            FullName = string.IsNullOrWhiteSpace(p.FullName) ? "Без имени" : p.FullName,
+            RoleId = p.RoleId,
+            RoleName = AvailableRoles.FirstOrDefault(r => r.Id == p.RoleId)?.Name ?? "Гость",
+            IsActive = p.IsActive,
+            Initials = GetInitials(p.FullName)
+        }).OrderByDescending(e => e.IsActive).ThenBy(e => e.FullName).ToList();
+
+        IsLoading = false;
+    }
+
+    private void OpenEditModal(EmployeeDto emp)
+    {
+        EditingEmployee = emp;
+        EditRoleId = emp.RoleId;
+        EditIsActive = emp.IsActive;
+        IsRoleDropdownOpen = false; // Сбрасываем состояние селектора
+    }
+
+    private void CloseEditModal()
+    {
+        EditingEmployee = null;
+        IsRoleDropdownOpen = false;
+    }
+
+    private void SelectRole(int? roleId)
+    {
+        EditRoleId = roleId;
+        IsRoleDropdownOpen = false; // Закрываем дропдаун после выбора
+    }
+
+    private async Task SaveEmployeeChanges()
+    {
+        if (EditingEmployee == null) return;
+
+        if (EditingEmployee.RoleId == EditRoleId && EditingEmployee.IsActive == EditIsActive)
+        {
+            CloseEditModal();
+            return;
+        }
+
+        IsSaving = true;
+        try
+        {
+            bool success = await AuthService.UpdateEmployeeAsync(EditingEmployee.Id, EditRoleId, EditIsActive);
+            if (success)
+            {
+                await LoadDataAsync();
+                await AlertService.ShowAlertAsync("Успех", "Данные сотрудника обновлены", "OK");
+                CloseEditModal();
+            }
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка доступа", ex.Message, "OK");
+        }
+        finally
+        {
+            IsSaving = false;
+        }
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "--";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : name.Substring(0, Math.Min(2, name.Length)).ToUpper();
+    }
+
+    private class EmployeeDto
+    {
+        public string Id { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public int? RoleId { get; set; }
+        public string RoleName { get; set; } = "";
+        public bool IsActive { get; set; }
+        public string Initials { get; set; } = "";
+    }
+}

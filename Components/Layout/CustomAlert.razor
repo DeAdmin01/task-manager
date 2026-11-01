@@ -1,0 +1,80 @@
+﻿@using SmartArena.Services
+@inject SmartArena.Interfaces.IAlertService AlertService
+@implements IDisposable
+
+@if (isVisible)
+{
+    <!-- Добавляем динамические классы для анимации появления и исчезновения -->
+    <div class="alert-overlay @(isClosing ? "fade-out" : "fade-in")">
+        <div class="alert-dialog @(isClosing ? "zoom-out" : "zoom-in")">
+            <h3 class="alert-title">@blazorAlertService?.Title</h3>
+            <p class="alert-message">@blazorAlertService?.Message</p>
+
+            <div class="alert-buttons">
+                @if (blazorAlertService?.ShowCancel == true)
+                {
+                    <button class="btn-cancel" @onclick="CancelWithAnimation">@blazorAlertService.CancelText</button>
+                }
+                <button class="btn-confirm" @onclick="ConfirmWithAnimation">@blazorAlertService?.ConfirmText</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isVisible;
+    private bool isClosing = false; // Флаг для запуска анимации закрытия
+    private BlazorAlertService? blazorAlertService;
+
+    protected override void OnInitialized()
+    {
+        blazorAlertService = AlertService as BlazorAlertService;
+
+        if (blazorAlertService != null)
+        {
+            blazorAlertService.OnShow += Show;
+            blazorAlertService.OnHide += Hide;
+        }
+    }
+
+    private void Show()
+    {
+        isClosing = false; // Сбрасываем флаг при новом показе
+        isVisible = true;
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void Hide()
+    {
+        isVisible = false;
+        isClosing = false;
+        InvokeAsync(StateHasChanged);
+    }
+
+    // Анимированное подтверждение
+    private async Task ConfirmWithAnimation()
+    {
+        isClosing = true;
+        StateHasChanged(); // Обновляем UI, чтобы применились классы fade-out/zoom-out
+        await Task.Delay(300); // Ждем завершения CSS анимации (300 мс)
+        blazorAlertService?.Confirm();
+    }
+
+    // Анимированная отмена
+    private async Task CancelWithAnimation()
+    {
+        isClosing = true;
+        StateHasChanged();
+        await Task.Delay(300);
+        blazorAlertService?.Cancel();
+    }
+
+    public void Dispose()
+    {
+        if (blazorAlertService != null)
+        {
+            blazorAlertService.OnShow -= Show;
+            blazorAlertService.OnHide -= Hide;
+        }
+    }
+}

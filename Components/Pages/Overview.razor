@@ -1,0 +1,250 @@
+﻿@page "/overview"
+@using SmartArena.Models
+@using SmartArena.Services
+@inject SupabaseService SupabaseService
+@inject AuthService AuthService
+@inject NavigationManager NavigationManager
+
+<div class="overview-container">
+    @if (IsLoading)
+    {
+        <div class="loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+        </div>
+    }
+    else
+    {
+        <div class="welcome-header">
+            <div>
+                <h1>С возвращением, <span style="color: var(--teal);">@UserName</span>!</h1>
+                <p>Вот ваша сводка по задачам и уведомлениям на сегодня.</p>
+            </div>
+            <div class="date-badge">
+                <i class="fa-regular fa-calendar"></i> @DateTime.Now.ToString("dd MMMM yyyy")
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card in-progress">
+                <div class="stat-icon"><i class="fa-solid fa-bars-progress"></i></div>
+                <div class="stat-info">
+                    <h3>В работе / Открыто</h3>
+                    <div class="stat-value">@OpenTasksCount</div>
+                </div>
+            </div>
+
+            <div class="stat-card completed">
+                <div class="stat-icon"><i class="fa-solid fa-check-double"></i></div>
+                <div class="stat-info">
+                    <h3>Выполнено</h3>
+                    <div class="stat-value">@ClosedTasksCount</div>
+                </div>
+            </div>
+
+            <div class="stat-card critical">
+                <div class="stat-icon"><i class="fa-solid fa-fire"></i></div>
+                <div class="stat-info">
+                    <h3>Критичных задач</h3>
+                    <div class="stat-value">@CriticalTasksCount</div>
+                </div>
+            </div>
+
+            <div class="stat-card efficiency">
+                <div class="stat-icon"><i class="fa-solid fa-chart-line"></i></div>
+                <div class="stat-info">
+                    <h3>Эффективность</h3>
+                    <div class="stat-value">
+                        @EfficiencyScore%
+                        <span class="efficiency-sub">(@ReworksCount доработок)</span>
+                    </div>
+                </div>
+                <div class="efficiency-bar-bg">
+                    <div class="efficiency-bar-fill" style="width: @(EfficiencyScore)%; background-color: @GetEfficiencyColor(EfficiencyScore);"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="notifications-section">
+            <div class="section-header">
+                <h2><i class="fa-regular fa-bell"></i> Ваши уведомления</h2>
+                @if (Notifications.Any(n => !n.IsRead))
+                {
+                    <button class="btn-mark-all" @onclick="MarkAllAsRead">
+                        <i class="fa-solid fa-check-double"></i> Прочитать все
+                    </button>
+                }
+            </div>
+
+            <div class="notifications-list">
+                @if (!Notifications.Any())
+                {
+                    <div class="empty-state">
+                        <i class="fa-regular fa-bell-slash"></i>
+                        <p>У вас пока нет уведомлений</p>
+                    </div>
+                }
+                else
+                {
+                    @foreach (var notif in Notifications)
+                    {
+                        <div class="notification-card @(notif.IsRead ? "read" : "unread")">
+                            <div class="notif-icon">
+                                @if (notif.Type == "ticket_assigned")
+                                {
+                                    <i class="fa-solid fa-thumbtack" style="color: var(--teal);"></i>
+                                }
+                                else if (notif.Type == "ticket_verified")
+                                {
+
+                                    <i class="fa-solid fa-shield-check" style="color: #32D74B;"></i>
+                                }
+                                else
+                                {
+
+                                    <i class="fa-solid fa-bell" style="color: gray;"></i>
+                                }
+                            </div>
+
+                            <div class="notif-content" @onclick="() => HandleNotificationClick(notif)">
+                                <h4>@notif.Title</h4>
+                                <p>@notif.Body</p>
+                                <span class="notif-date">@notif.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                            </div>
+
+                            @if (!notif.IsRead)
+                            {
+                                <button class="btn-read-single" @onclick="() => MarkAsRead(notif)" title="Отметить прочитанным">
+                                    <i class="fa-solid fa-circle-check"></i>
+                                </button>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    private bool IsLoading = true;
+    private string CurrentUserId = "";
+    private string UserName = "Сотрудник";
+
+    // Метрики
+    private int OpenTasksCount = 0;
+    private int ClosedTasksCount = 0;
+    private int CriticalTasksCount = 0;
+    private int EfficiencyScore = 100;
+    private int ReworksCount = 0;
+
+    private List<Notification> Notifications = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUserId = AuthService.CurrentUser?.Id ?? "";
+        if (string.IsNullOrEmpty(CurrentUserId)) return;
+
+        try
+        {
+            // Получаем имя
+            var profileRes = await SupabaseService.Client.From<SmartArena.Models.Profile>()
+                .Filter("id", Supabase.Postgrest.Constants.Operator.Equals, CurrentUserId)
+                .Get();
+            UserName = profileRes.Models.FirstOrDefault()?.FullName ?? "Сотрудник";
+
+            await LoadDashboardData();
+        }
+        finally
+        {
+            IsLoading = false;
+        }
+    }
+
+    private async Task LoadDashboardData()
+    {
+        // 1. Загрузка задач сотрудника
+        var ticketsRes = await SupabaseService.Client.From<Ticket>()
+            .Filter("assignee_id", Supabase.Postgrest.Constants.Operator.Equals, CurrentUserId)
+            .Get();
+        var myTickets = ticketsRes.Models;
+
+        // Загружаем статусы и приоритеты для фильтрации
+        var statuses = (await SupabaseService.Client.From<TicketStatus>().Get()).Models;
+        var priorities = (await SupabaseService.Client.From<TicketPriority>().Get()).Models.OrderByDescending(p => p.Weight).ToList();
+
+        // Определяем "закрытые" статусы и "критичные" приоритеты
+        var closedStatusIds = statuses.Where(s => s.Name.Contains("Закрыт", StringComparison.OrdinalIgnoreCase)).Select(s => s.Id).ToList();
+        var criticalPriorityId = priorities.FirstOrDefault()?.Id ?? 0; // Самый высокий вес
+
+        // Подсчет метрик
+        ClosedTasksCount = myTickets.Count(t => closedStatusIds.Contains(t.StatusId));
+        OpenTasksCount = myTickets.Count - ClosedTasksCount;
+        CriticalTasksCount = myTickets.Count(t => t.PriorityId == criticalPriorityId && !closedStatusIds.Contains(t.StatusId));
+
+        // 2. Расчет эффективности (Количество доработок)
+        if (myTickets.Any())
+        {
+            var ticketIds = myTickets.Select(t => t.Id.ToString()).ToList();
+            var historyRes = await SupabaseService.Client.From<TicketHistory>().Get();
+
+            // Ищем историю только для задач пользователя
+            var myHistory = historyRes.Models.Where(h => ticketIds.Contains(h.TicketId)).ToList();
+
+            // Считаем возвраты. Это ситуации, когда статус переходит в "Доработка" ИЛИ когда OldStatusId > NewStatusId (откат)
+            var reworkStatusIds = statuses.Where(s => s.Name.Contains("доработ", StringComparison.OrdinalIgnoreCase) || s.Name.Contains("возврат", StringComparison.OrdinalIgnoreCase)).Select(s => s.Id).ToList();
+
+            ReworksCount = myHistory.Count(h =>
+                            (h.NewStatusId.HasValue && reworkStatusIds.Contains(h.NewStatusId.Value)) ||
+                            (h.OldStatusId > h.NewStatusId)); // Базовый эвристический откат назад
+
+            // Формула: за каждую доработку снимаем 15% эффективности
+            EfficiencyScore = Math.Max(0, 100 - (ReworksCount * 15));
+        }
+
+        // 3. Загрузка уведомлений
+        var notifRes = await SupabaseService.Client.From<Notification>()
+            .Filter("user_id", Supabase.Postgrest.Constants.Operator.Equals, CurrentUserId)
+            .Get();
+
+        Notifications = notifRes.Models.OrderByDescending(n => n.CreatedAt).ToList();
+    }
+
+    private async Task MarkAsRead(Notification notif)
+    {
+        notif.IsRead = true;
+        await SupabaseService.Client.From<Notification>().Update(notif);
+        StateHasChanged();
+    }
+
+    private async Task MarkAllAsRead()
+    {
+        var unread = Notifications.Where(n => !n.IsRead).ToList();
+        foreach (var n in unread)
+        {
+            n.IsRead = true;
+            await SupabaseService.Client.From<Notification>().Update(n);
+        }
+        StateHasChanged();
+    }
+
+    private void HandleNotificationClick(Notification notif)
+    {
+        if (!notif.IsRead)
+        {
+            _ = MarkAsRead(notif);
+        }
+
+        // Переход на страницу задач, если уведомление связано с задачей
+        if (notif.Type.Contains("ticket"))
+        {
+            NavigationManager.NavigateTo("/tasks");
+        }
+    }
+
+    private string GetEfficiencyColor(int score)
+    {
+        if (score >= 80) return "#32D74B"; // Зеленый
+        if (score >= 50) return "#FFD60A"; // Желтый/Оранжевый
+        return "#FF453A"; // Красный
+    }
+}

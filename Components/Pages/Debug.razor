@@ -1,0 +1,109 @@
+﻿@page "/debug"
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@using Microsoft.Maui.Storage
+@using Microsoft.Maui.ApplicationModel
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+@inject ISystemNotificationService SystemNotificationService
+
+<div class="debug-page-container" style="display: flex; flex-direction: column; min-height: 100vh;">
+
+    <div class="content-wrapper" style="flex: 1;">
+        <div class="page-header">
+            <h1>Инструменты отладки</h1>
+        </div>
+
+        <div class="debug-content">
+            <div class="debug-card">
+                <h3>Имитация системных событий</h3>
+                <div class="debug-actions">
+
+                    <button class="btn-debug danger" @onclick="TriggerCriticalError">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        Вызвать критическую ошибку
+                    </button>
+
+                    <button class="btn-debug success" @onclick="SendSystemNotification">
+                        <i class="fa-solid fa-bell"></i>
+                        Тестовое уведомление в шторку
+                    </button>
+
+                    <button class="btn-debug warning" @onclick="ClearApplicationData">
+                        <i class="fa-solid fa-trash-can"></i>
+                        Очистить данные приложения
+                    </button>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-version-footer" style="text-align: center; padding: 20px; color: #888; font-size: 0.9em;">
+        Версия приложения: @AppVersion
+    </div>
+</div>
+
+@code {
+    private string AppVersion { get; set; } = "Неизвестно";
+
+    protected override void OnInitialized()
+    {
+        AppVersion = $"{AppInfo.Current.VersionString} (Сборка {AppInfo.Current.BuildString})";
+    }
+
+    private async Task TriggerCriticalError()
+    {
+        bool confirm = await AlertService.ShowAlertAsync(
+            "Подтверждение",
+            "Спровоцировать переход на несуществующую страницу для проверки обработки 404?",
+            "Да",
+            "Отмена"
+        );
+
+        if (confirm)
+        {
+            NavManager.NavigateTo("/debug-force-404-error-page");
+        }
+    }
+
+    private async Task SendSystemNotification()
+    {
+        try
+        {
+            await SystemNotificationService.ShowLocalNotificationAsync(
+                "SmartArena Отладка",
+                "Это тестовое уведомление. Оно должно появиться в системной шторке."
+            );
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка отправки пуша", ex.Message, "OK");
+        }
+    }
+
+    private async Task ClearApplicationData()
+    {
+        bool confirm = await AlertService.ShowAlertAsync(
+            "Внимание!",
+            "Вы уверены, что хотите очистить все локальные настройки и кэш приложения?",
+            "Очистить",
+            "Отмена"
+        );
+
+        if (confirm)
+        {
+            try
+            {
+                Preferences.Default.Clear();
+                SecureStorage.Default.RemoveAll();
+                await AlertService.ShowAlertAsync("Успешно", "Все локальные данные были очищены.", "OK");
+                NavManager.NavigateTo("/");
+            }
+            catch (Exception ex)
+            {
+                await AlertService.ShowAlertAsync("Ошибка очистки", ex.Message, "OK");
+            }
+        }
+    }
+}

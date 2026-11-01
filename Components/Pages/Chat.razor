@@ -1,0 +1,552 @@
+﻿@page "/chat"
+@using SmartArena.Models
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject ChatService ChatService
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject CryptoService CryptoService
+@implements IAsyncDisposable
+
+<div class="chat-page-container">
+    <div class="page-header">
+        <h1>Сообщения</h1>
+    </div>
+
+    @if (IsLoading)
+    {
+        <div style="display:flex; justify-content:center; align-items:center; height: 50vh; color: gray;">
+            <i class="fa-solid fa-spinner fa-spin" style="font-size: 40px;"></i>
+        </div>
+    }
+    else if (!HasChatAccess)
+    {
+        <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height: 50vh; color: gray;">
+            <i class="fa-solid fa-lock" style="font-size: 60px; margin-bottom: 20px; opacity: 0.5;"></i>
+            <h2>Доступ запрещен</h2>
+            <p>У вас нет прав для использования корпоративного чата.</p>
+        </div>
+    }
+    else
+    {
+        <div class="chat-layout @(SelectedChat != null ? "chat-active" : "")">
+
+            <div class="chat-sidebar">
+                <div class="sidebar-header">
+                    <h2>Чаты</h2>
+                    <button class="btn-icon" @onclick="OpenCreateChatModal"><i class="fa-solid fa-pen-to-square"></i></button>
+                </div>
+
+                <div class="chat-search-wrapper">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Поиск чата..." @bind="ChatSearchText" @bind:event="oninput" />
+                </div>
+
+                <div class="chat-list">
+                    @foreach (var chat in FilteredChats)
+                    {
+                        <div class="chat-item @(SelectedChat?.Id == chat.Id ? "active" : "")" @onclick="() => SelectChat(chat)">
+                            <div class="avatar small">
+                                @(chat.Type == "group" ? "G" : "P")
+                            </div>
+                            <div class="chat-info">
+                                <p class="chat-name">@(string.IsNullOrEmpty(chat.Title) ? "Личный чат" : chat.Title)</p>
+                            </div>
+                        </div>
+                    }
+                    @if (!FilteredChats.Any())
+                    {
+                        <p style="text-align:center; color:gray; margin-top:20px;">Чаты не найдены</p>
+                    }
+                </div>
+            </div>
+
+            @if (SelectedChat != null)
+            {
+                <div class="chat-main">
+                    <div class="chat-header">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <button class="btn-icon mobile-back-btn" @onclick="() => SelectedChat = null">
+                                <i class="fa-solid fa-arrow-left"></i>
+                            </button>
+                            <h3 style="margin:0; color: var(--text-primary);">@(string.IsNullOrEmpty(SelectedChat.Title) ? "Чат" : SelectedChat.Title)</h3>
+                        </div>
+                        <button class="btn-icon" @onclick="OpenChatInfoModal"><i class="fa-solid fa-circle-info"></i></button>
+                    </div>
+
+                    <div class="messages-container" id="msg-container">
+                        @foreach (var msg in Messages)
+                        {
+                            bool isMine = msg.SenderId == CurrentUserId;
+
+                            // Ищем имя отправителя для групповых чатов
+                            string senderName = "";
+                            if (!isMine && SelectedChat.Type == "group")
+                            {
+                                var senderProfile = AllLoadedProfiles.FirstOrDefault(p => string.Equals(p.Id, msg.SenderId, StringComparison.OrdinalIgnoreCase));
+                                senderName = senderProfile?.FullName ?? "Неизвестный";
+                            }
+
+                            <div class="msg-row @(isMine ? "mine" : "other")">
+                                <div class="msg-bubble @(isMine ? "mine" : "other")">
+
+                                    @if (!string.IsNullOrEmpty(senderName))
+                                    {
+                                        <div class="msg-sender-name">@senderName</div>
+                                    }
+
+                                    @msg.EncryptedContent
+                                    <div class="msg-meta">
+                                        <span>@(msg.CreatedAt.HasValue ? msg.CreatedAt.Value.ToLocalTime().ToString("HH:mm") : "")</span>
+                                        @if (isMine)
+                                        {
+                                            <span class="read-status @(msg.IsRead ? "read" : "")">
+                                                <i class="fa-solid @(msg.IsRead ? "fa-check-double" : "fa-check")"></i>
+                                            </span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div class="chat-input-area">
+                        <input type="text" placeholder="Введите сообщение..." @bind="NewMessageText" @onkeyup="HandleKeyUp" />
+                        <button class="btn-send" @onclick="SendMessage"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="chat-main" style="justify-content: center; align-items: center; color: gray;">
+                    <i class="fa-regular fa-comments" style="font-size: 60px; margin-bottom: 20px; opacity: 0.5;"></i>
+                    <p>Выберите чат для начала общения</p>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (IsCreateModalOpen)
+{
+    // ... HTML модального окна создания чата без изменений ...
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">Создать чат</h3>
+
+            <div class="input-field">
+                <label>Тип чата</label>
+                <div class="custom-select" @onclick="() => IsTypeDropdownOpen = !IsTypeDropdownOpen">
+                    <div class="select-selected">
+                        <span>@(NewChatType == "private" ? "Личный" : "Групповой")</span>
+                        <i class="fa-solid fa-chevron-down @(IsTypeDropdownOpen ? "open" : "")"></i>
+                    </div>
+                    @if (IsTypeDropdownOpen)
+                    {
+                        <div class="select-items">
+                            <div class="select-item" @onclick='() => SelectChatType("private")'>Личный</div>
+                            <div class="select-item" @onclick='() => SelectChatType("group")'>Групповой</div>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="input-field">
+                <label>Название чата</label>
+                <div class="input-wrapper">
+                    <input type="text" @bind="NewChatTitle" placeholder="@(NewChatType == "private" ? "Например: С Иваном" : "Введите название группы...")" />
+                </div>
+            </div>
+
+            <div class="input-field">
+                <label>Выберите участников</label>
+                <div class="user-search-box">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Поиск сотрудника..." @bind="UserSearchText" @bind:event="oninput" />
+                </div>
+
+                <div class="user-select-list">
+                    @foreach (var u in FilteredAvailableUsers)
+                    {
+                        <div class="user-select-item" @onclick="() => ToggleUserSelection(u)">
+                            <div class="avatar small">@u.Initials</div>
+                            <span style="flex-grow:1; color: var(--text-primary);">@u.FullName</span>
+                            @if (u.IsSelected)
+                            {
+                                <i class="fa-solid fa-check" style="color:var(--teal);"></i>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsCreateModalOpen = false">Отмена</button>
+                <button class="btn-confirm" @onclick="CreateChat">Создать</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsInfoModalOpen && SelectedChat != null)
+{
+    // ... HTML модального окна информации о чате без изменений ...
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">Информация о чате</h3>
+
+            @if (IsCurrentUserAdmin)
+            {
+                <div class="input-field">
+                    <label>Изменить название</label>
+                    <div style="display:flex; gap:10px;">
+                        <div class="input-wrapper" style="flex-grow:1;"><input type="text" @bind="EditChatTitle" /></div>
+                        <button class="btn-primary" style="width:auto; height:45px; margin:0; padding: 0 15px;" @onclick="RenameChat">OK</button>
+                    </div>
+                </div>
+            }
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 20px;">
+                <h4 style="margin: 0; color: var(--text-primary);">Участники:</h4>
+                @if (IsCurrentUserAdmin && SelectedChat.Type == "group")
+                {
+                    <button class="btn-icon" style="color: var(--teal);" @onclick="OpenAddUserModal" title="Добавить участника">
+                        <i class="fa-solid fa-user-plus"></i>
+                    </button>
+                }
+            </div>
+
+            <div style="max-height: 200px; overflow-y: auto; margin-top: 10px;">
+                @foreach (var part in CurrentChatParticipants)
+                {
+                    var userProfile = AllLoadedProfiles.FirstOrDefault(p => string.Equals(p.Id, part.UserId, StringComparison.OrdinalIgnoreCase));
+                    bool isMe = string.Equals(part.UserId, CurrentUserId, StringComparison.OrdinalIgnoreCase);
+
+                    string name = isMe ? "Вы" : (userProfile?.FullName ?? "Неизвестный");
+                    string init = isMe ? "Я" : GetInitials(name);
+
+                    <div class="participant-item">
+                        <div class="avatar small">@init</div>
+                        <span style="margin-left:10px; flex-grow:1; color:var(--text-primary);">@name</span>
+                        @if (part.IsAdmin)
+                        {
+                            <span class="admin-badge">Владелец</span>
+                        }
+                        else if (IsCurrentUserAdmin)
+                        {
+                            <button class="btn-icon" style="color: #FF453A; font-size: 14px;" @onclick="() => RemoveUser(part.UserId)">
+                                <i class="fa-solid fa-user-minus"></i>
+                            </button>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (IsCurrentUserAdmin)
+            {
+                <div style="margin-top: 20px;">
+                    <button class="btn-action danger" style="width: 100%; border-radius: 12px; height: 45px;" @onclick="DeleteChat">
+                        <i class="fa-solid fa-trash-can"></i> Удалить чат
+                    </button>
+                </div>
+            }
+
+            <div class="modal-actions">
+                <button class="btn-cancel" style="width:100%;" @onclick="() => IsInfoModalOpen = false">Закрыть</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsAddUserModalOpen)
+{
+    // ... HTML модального окна добавления участников без изменений ...
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">Добавить участников</h3>
+            <div class="input-field">
+                <div class="user-search-box">
+                    <i class="fa-solid fa-search"></i>
+                    <input type="text" placeholder="Поиск сотрудника..." @bind="AddUserSearchText" @bind:event="oninput" />
+                </div>
+                <div class="user-select-list">
+                    @foreach (var u in FilteredUsersToAdd)
+                    {
+                        <div class="user-select-item" @onclick="() => { u.IsSelected = !u.IsSelected; StateHasChanged(); }">
+                            <div class="avatar small">@u.Initials</div>
+                            <span style="flex-grow:1; color: var(--text-primary);">@u.FullName</span>
+                            @if (u.IsSelected)
+                            {
+                                <i class="fa-solid fa-check" style="color:var(--teal);"></i>
+                            }
+                        </div>
+                    }
+                    @if (!FilteredUsersToAdd.Any())
+                    {
+                        <p style="text-align:center; color:gray; font-size: 12px;">Нет доступных сотрудников</p>
+                    }
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsAddUserModalOpen = false">Отмена</button>
+                <button class="btn-confirm" @onclick="ConfirmAddUsers">Добавить</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string CurrentUserId = "";
+    private bool IsLoading = true;
+    private bool HasChatAccess = false;
+
+    private List<Conversation> Chats = new();
+    private Conversation? SelectedChat;
+    private List<ChatMessage> Messages = new();
+    private string NewMessageText = "";
+    private bool IsAddUserModalOpen;
+    private string AddUserSearchText = "";
+    private List<UserDto> UsersToAdd = new();
+    private string ChatSearchText = "";
+    private IEnumerable<Conversation> FilteredChats => string.IsNullOrWhiteSpace(ChatSearchText)
+        ? Chats
+        : Chats.Where(c => (c.Title ?? "Личный чат").Contains(ChatSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<UserDto> FilteredUsersToAdd => string.IsNullOrWhiteSpace(AddUserSearchText)
+        ? UsersToAdd : UsersToAdd.Where(u => u.FullName.Contains(AddUserSearchText, StringComparison.OrdinalIgnoreCase));
+
+    // Данные для выбора участников
+    private List<UserDto> AvailableUsers = new();
+    private List<SmartArena.Models.Profile> AllLoadedProfiles = new();
+    private string UserSearchText = "";
+    private IEnumerable<UserDto> FilteredAvailableUsers => string.IsNullOrWhiteSpace(UserSearchText)
+        ? AvailableUsers : AvailableUsers.Where(u => u.FullName.Contains(UserSearchText, StringComparison.OrdinalIgnoreCase));
+
+    // State для модалок
+    private bool IsCreateModalOpen;
+    private bool IsTypeDropdownOpen = false;
+    private string NewChatType = "private";
+    private string NewChatTitle = "";
+
+    private bool IsInfoModalOpen;
+    private string EditChatTitle = "";
+    private bool IsCurrentUserAdmin = false;
+    private List<ConversationParticipant> CurrentChatParticipants = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUserId = AuthService.CurrentUser?.Id ?? "";
+
+        // Проверяем наличие права chat.use
+        // (Убедитесь, что метод проверки прав в вашем AuthService называется именно так.
+        // Если он называется иначе, замените на нужный метод.)
+        HasChatAccess = await AuthService.UserHasPermissionAsync("chat.use");
+
+        if (!HasChatAccess)
+        {
+            IsLoading = false;
+            return; // Если прав нет, прерываем загрузку и показываем заглушку
+        }
+
+        await LoadChats();
+
+        AllLoadedProfiles = await AuthService.GetAllProfilesAsync();
+        AvailableUsers = AllLoadedProfiles
+            .Where(p => !string.Equals(p.Id, CurrentUserId, StringComparison.OrdinalIgnoreCase) && p.IsActive)
+            .Select(p => new UserDto
+            {
+                Id = p.Id,
+                FullName = string.IsNullOrWhiteSpace(p.FullName) ? "Без имени" : p.FullName,
+                Initials = GetInitials(p.FullName)
+            }).ToList();
+
+        IsLoading = false;
+    }
+
+    private async Task LoadChats() { Chats = await ChatService.GetMyChatsAsync(CurrentUserId); }
+
+    private async Task SelectChat(Conversation chat)
+    {
+        SelectedChat = chat;
+        Messages = await ChatService.GetMessagesAsync(chat);
+
+        // Помечаем сообщения как прочитанные в фоне
+        _ = ChatService.MarkMessagesAsReadAsync(chat.Id, CurrentUserId);
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(NewMessageText) || SelectedChat == null) return;
+        await ChatService.SendMessageAsync(SelectedChat, CurrentUserId, NewMessageText);
+        Messages.Add(new ChatMessage { SenderId = CurrentUserId, EncryptedContent = NewMessageText, CreatedAt = DateTime.UtcNow, IsRead = false });
+        NewMessageText = "";
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e) { if (e.Key == "Enter") await SendMessage(); }
+
+    private void OpenCreateChatModal()
+    {
+        NewChatType = "private";
+        NewChatTitle = "";
+        UserSearchText = "";
+        IsTypeDropdownOpen = false;
+        foreach (var u in AvailableUsers) u.IsSelected = false;
+        IsCreateModalOpen = true;
+    }
+
+    private void SelectChatType(string type)
+    {
+        NewChatType = type;
+        IsTypeDropdownOpen = false;
+        if (type == "private" && AvailableUsers.Count(u => u.IsSelected) > 1)
+            foreach (var u in AvailableUsers) u.IsSelected = false;
+    }
+
+    private void ToggleUserSelection(UserDto user)
+    {
+        if (NewChatType == "private")
+        {
+            foreach (var u in AvailableUsers) u.IsSelected = false;
+            user.IsSelected = true;
+        }
+        else
+        {
+            user.IsSelected = !user.IsSelected;
+        }
+        StateHasChanged();
+    }
+
+    private async Task CreateChat()
+    {
+        var selectedIds = AvailableUsers.Where(u => u.IsSelected).Select(u => u.Id).ToList();
+        if (!selectedIds.Any())
+        {
+            await AlertService.ShowAlertAsync("Внимание", "Выберите хотя бы одного участника", "OK");
+            return;
+        }
+
+        try
+        {
+            var newChat = await ChatService.CreateChatAsync(CurrentUserId, NewChatType, NewChatTitle, selectedIds);
+            await LoadChats();
+            IsCreateModalOpen = false;
+        }
+        catch (Exception ex) { await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK"); }
+    }
+
+    private async Task OpenChatInfoModal()
+    {
+        if (SelectedChat == null) return;
+        EditChatTitle = SelectedChat.Title ?? "";
+
+        CurrentChatParticipants = await ChatService.GetParticipantsAsync(SelectedChat.Id);
+
+        var myParticipant = CurrentChatParticipants.FirstOrDefault(p => string.Equals(p.UserId, CurrentUserId, StringComparison.OrdinalIgnoreCase));
+        IsCurrentUserAdmin = myParticipant?.IsAdmin ?? false;
+
+        IsInfoModalOpen = true;
+    }
+
+    private async Task RenameChat()
+    {
+        if (SelectedChat == null || string.IsNullOrWhiteSpace(EditChatTitle)) return;
+        await ChatService.RenameChatAsync(SelectedChat.Id, EditChatTitle);
+        SelectedChat.Title = EditChatTitle;
+        await AlertService.ShowAlertAsync("Успех", "Чат переименован", "OK");
+    }
+
+    private async Task DeleteChat()
+    {
+        bool confirm = await AlertService.ShowAlertAsync("Удаление чата", "Вы уверены, что хотите удалить этот чат? Восстановить историю переписки будет невозможно.", "Удалить", "Отмена");
+        if (confirm && SelectedChat != null)
+        {
+            try
+            {
+                await ChatService.DeleteChatAsync(SelectedChat.Id);
+                SelectedChat = null;
+                IsInfoModalOpen = false;
+                await LoadChats();
+                await AlertService.ShowAlertAsync("Успех", "Чат был удален", "OK");
+            }
+            catch (Exception ex)
+            {
+                await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+            }
+        }
+    }
+
+    private void OpenAddUserModal()
+    {
+        AddUserSearchText = "";
+
+        var existingIds = CurrentChatParticipants.Select(p => p.UserId).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        UsersToAdd = AvailableUsers
+                    .Where(u => !existingIds.Contains(u.Id))
+                    .Select(u => new UserDto { Id = u.Id, FullName = u.FullName, Initials = u.Initials, IsSelected = false })
+                    .ToList();
+
+        IsAddUserModalOpen = true;
+    }
+
+    private async Task ConfirmAddUsers()
+    {
+        var selectedIds = UsersToAdd.Where(u => u.IsSelected).Select(u => u.Id).ToList();
+        if (!selectedIds.Any())
+        {
+            await AlertService.ShowAlertAsync("Внимание", "Выберите хотя бы одного участника", "OK");
+            return;
+        }
+
+        try
+        {
+            await ChatService.AddParticipantsAsync(SelectedChat!.Id, selectedIds);
+            IsAddUserModalOpen = false;
+            CurrentChatParticipants = await ChatService.GetParticipantsAsync(SelectedChat.Id);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+        }
+    }
+
+    private async Task RemoveUser(string userId)
+    {
+        bool confirm = await AlertService.ShowAlertAsync("Удаление", "Удалить этого участника из группы?", "Да", "Отмена");
+        if (confirm)
+        {
+            try
+            {
+                await ChatService.RemoveParticipantAsync(SelectedChat!.Id, userId);
+                CurrentChatParticipants = await ChatService.GetParticipantsAsync(SelectedChat.Id);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+            }
+        }
+    }
+
+    private string GetInitials(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "--";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1 ? $"{parts[0][0]}{parts[1][0]}".ToUpper() : name.Substring(0, Math.Min(2, name.Length)).ToUpper();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // Интерфейс сохранен, но метод пуст, так как IRealtimeChannel был удален.
+        await Task.CompletedTask;
+    }
+
+    private class UserDto
+    {
+        public string Id { get; set; } = "";
+        public string FullName { get; set; } = "";
+        public string Initials { get; set; } = "";
+        public bool IsSelected { get; set; }
+    }
+}

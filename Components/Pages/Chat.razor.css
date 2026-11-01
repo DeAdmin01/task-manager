@@ -1,0 +1,430 @@
+﻿/* Изолированные стили только для страницы чатов */
+.chat-layout {
+    display: flex;
+    height: calc(100vh - 100px); /* Учитываем верхнее меню/паддинги */
+    background-color: var(--card-bg);
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+/* --- ЛЕВАЯ ПАНЕЛЬ (СПИСОК ЧАТОВ) --- */
+.chat-sidebar {
+    width: 320px;
+    border-right: 1px solid var(--input-bg);
+    display: flex;
+    flex-direction: column;
+    background-color: var(--card-bg);
+}
+
+.sidebar-header {
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+    .sidebar-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: var(--text-primary);
+    }
+
+.chat-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    padding: 10px;
+}
+
+.chat-item {
+    display: flex;
+    align-items: center;
+    padding: 15px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+    margin-bottom: 5px;
+}
+
+    .chat-item:hover, .chat-item.active {
+        background-color: var(--input-bg);
+    }
+
+.chat-info {
+    margin-left: 15px;
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.chat-name {
+    font-weight: bold;
+    color: var(--text-primary);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* --- ПРАВАЯ ПАНЕЛЬ (АКТИВНЫЙ ЧАТ) --- */
+.chat-main {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--bg-color); /* Чуть темнее фон для сообщений */
+}
+
+.chat-header {
+    padding: 15px 25px;
+    background-color: var(--card-bg);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--input-bg);
+}
+
+.messages-container {
+    flex-grow: 1;
+    padding: 25px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+/* Пузыри сообщений */
+.msg-row {
+    display: flex;
+    width: 100%;
+}
+
+    .msg-row.mine {
+        justify-content: flex-end;
+    }
+
+    .msg-row.other {
+        justify-content: flex-start;
+    }
+
+.msg-bubble {
+    max-width: 70%;
+    padding: 12px 18px;
+    border-radius: 18px;
+    position: relative;
+    font-size: 15px;
+    line-height: 1.4;
+}
+
+    .msg-bubble.mine {
+        background-color: var(--teal);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .msg-bubble.other {
+        background-color: var(--card-bg);
+        color: var(--text-primary);
+        border-bottom-left-radius: 4px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+    }
+
+.msg-meta {
+    font-size: 11px;
+    margin-top: 5px;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 5px;
+    opacity: 0.8;
+}
+
+.msg-bubble.mine .msg-meta {
+    color: rgba(255,255,255,0.8);
+}
+
+.msg-bubble.other .msg-meta {
+    color: gray;
+}
+
+.read-status {
+    font-size: 14px;
+}
+
+    .read-status.read {
+        color: #4CAF50;
+    }
+/* Зеленые галочки */
+
+/* Ввод текста */
+.chat-input-area {
+    padding: 20px;
+    background-color: var(--card-bg);
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+    .chat-input-area input {
+        flex-grow: 1;
+        height: 50px;
+        border-radius: 25px;
+        border: none;
+        background-color: var(--input-bg);
+        padding: 0 20px;
+        color: var(--text-primary);
+        outline: none;
+    }
+
+.btn-send {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background-color: var(--teal);
+    color: white;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    box-shadow: 0 4px 10px rgba(0, 128, 128, 0.3);
+}
+
+/* Модалка Участников / Инфо */
+.admin-badge {
+    background-color: rgba(0, 128, 128, 0.1);
+    color: var(--teal);
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: bold;
+    margin-left: auto;
+}
+
+.participant-item {
+    display: flex;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--input-bg);
+}
+
+/* Адаптивность для телефонов */
+@media (max-width: 768px) {
+    .chat-layout {
+        height: calc(100vh - 120px);
+        flex-direction: column;
+    }
+
+    .chat-sidebar {
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--input-bg);
+        flex: 1;
+    }
+
+    .chat-main {
+        display: none;
+    }
+    /* Скрываем чат, пока он не выбран */
+
+    /* Классы для переключения на мобилках */
+    .chat-layout.chat-active .chat-sidebar {
+        display: none;
+    }
+
+    .chat-layout.chat-active .chat-main {
+        display: flex;
+        flex: 1;
+    }
+}
+
+/* --- Стили для выпадающего списка (Тип чата) --- */
+.custom-select {
+    position: relative;
+    width: 100%;
+    user-select: none;
+}
+
+.select-selected {
+    background-color: var(--input-bg);
+    border-radius: 10px;
+    padding: 10px 15px; /* Слегка уменьшен padding для аккуратности */
+    color: var(--text-primary);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+    .select-selected i {
+        color: gray;
+        transition: transform 0.2s;
+    }
+
+        .select-selected i.open {
+            transform: rotate(180deg);
+        }
+
+.select-items {
+    position: absolute;
+    background-color: var(--card-bg);
+    top: 110%;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    overflow: hidden;
+}
+
+.select-item {
+    padding: 12px 15px;
+    cursor: pointer;
+    border-bottom: 1px solid var(--input-bg);
+}
+
+    .select-item:last-child {
+        border-bottom: none;
+    }
+
+    .select-item:hover {
+        background-color: var(--input-bg);
+    }
+
+
+/* --- Стили для списка выбора участников (Новый чат) --- */
+.user-search-box {
+    display: flex;
+    align-items: center;
+    background-color: var(--input-bg);
+    border-radius: 10px;
+    padding: 5px 15px;
+    margin-bottom: 10px;
+}
+
+    .user-search-box input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        height: 35px;
+        color: var(--text-primary);
+        outline: none;
+        margin-left: 10px;
+    }
+
+    .user-search-box i {
+        color: var(--teal);
+    }
+
+.user-select-list {
+    max-height: 180px;
+    overflow-y: auto;
+    border: 1px solid var(--input-bg);
+    border-radius: 10px;
+    padding: 5px;
+}
+
+.user-select-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.2s;
+}
+
+    .user-select-item:hover {
+        background-color: var(--input-bg);
+    }
+
+/* Изолированные стили только для страницы чатов */
+
+/* Ограничиваем высоту всей страницы, чтобы не было двойного скролла */
+.chat-page-container {
+    display: flex;
+    flex-direction: column;
+    /* Вычитаем высоту паддингов и верхних элементов */
+    height: calc(100vh - 100px);
+    overflow: hidden;
+}
+
+.chat-layout {
+    display: flex;
+    flex-grow: 1; /* Растягивается на все оставшееся место */
+    min-height: 0; /* ВАЖНО: Разрешает вложенным блокам сжиматься и скроллиться */
+    background-color: var(--card-bg);
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    overflow: hidden;
+}
+
+/* --- ПОИСК В СПИСКЕ ЧАТОВ --- */
+.chat-search-wrapper {
+    display: flex;
+    align-items: center;
+    padding: 10px 15px;
+    margin: 0 10px 10px 10px;
+    background-color: var(--input-bg);
+    border-radius: 12px;
+}
+
+    .chat-search-wrapper i {
+        color: var(--teal);
+        margin-right: 10px;
+    }
+
+    .chat-search-wrapper input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        color: var(--text-primary);
+        outline: none;
+    }
+
+/* Кнопка "Назад" на мобильных скрыта по умолчанию на ПК */
+.mobile-back-btn {
+    display: none;
+}
+
+/* --- АДАПТИВНОСТЬ ДЛЯ ТЕЛЕФОНОВ --- */
+@media (max-width: 768px) {
+    .chat-page-container {
+        /* На мобилках вычитаем еще и высоту нижней панели (100px) + отступ статус-бара */
+        height: calc(100vh - env(safe-area-inset-top, 25px) - 130px);
+    }
+
+    .mobile-back-btn {
+        display: block;
+    }
+
+    .chat-layout {
+        flex-direction: column;
+    }
+
+    .chat-sidebar {
+        width: 100%;
+        border-right: none;
+        flex: 1;
+        min-height: 0;
+    }
+
+    .chat-main {
+        display: none;
+    }
+
+    /* Классы для переключения "Список / Чат" на мобилках */
+    .chat-layout.chat-active .chat-sidebar {
+        display: none;
+    }
+
+    .chat-layout.chat-active .chat-main {
+        display: flex;
+        flex: 1;
+        min-height: 0;
+    }
+}
+
+/* Имя отправителя в групповых чатах */
+.msg-sender-name {
+    font-size: 12px;
+    font-weight: bold;
+    color: var(--teal);
+    margin-bottom: 4px;
+}

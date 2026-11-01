@@ -1,0 +1,11 @@
+{
+  "profiles": {
+    "SmartArena (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "SmartArena (Unpackaged)": {
+      "commandName": "Project",
+      "nativeDebugging": false
+    }
+  }
+}

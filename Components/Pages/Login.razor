@@ -1,0 +1,119 @@
+﻿@page "/login"
+@layout Components.Layout.AuthLayout
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@using System.Text.RegularExpressions
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+
+<div class="auth-page">
+    <div class="auth-header">
+        <img src="logo.png" alt="Logo" class="logo" />
+        <h1>Smart Arena</h1>
+    </div>
+
+    <div class="auth-card">
+        <h2 class="card-title">Добро пожаловать!</h2>
+
+        <div class="input-group">
+            <input type="email" placeholder="Email" @bind="Email" @bind:event="oninput" />
+        </div>
+
+        <div class="input-group password-group">
+            <input type="@(IsPasswordMasked ? "password" : "text")" placeholder="Пароль" @bind="Password" @bind:event="oninput" />
+            <button class="icon-btn" @onclick="TogglePassword">
+                <i class="fa-solid @(IsPasswordMasked ? "fa-eye" : "fa-eye-slash")"></i>
+            </button>
+        </div>
+
+        @if (!string.IsNullOrEmpty(ErrorMessage))
+        {
+            <div class="error-text">@ErrorMessage</div>
+        }
+
+        <button class="btn-primary" @onclick="LoginAsync" disabled="@IsBusy">
+            @(IsBusy ? "Вход..." : "Войти")
+        </button>
+
+        <div class="auth-links">
+            <a @onclick='() => NavManager.NavigateTo("/forgot-password")'>Забыли пароль?</a>
+            <div class="register-link">
+                <span>Нет аккаунта?</span>
+                <a @onclick='() => NavManager.NavigateTo("/register")' class="highlight">Зарегистрироваться</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string Email { get; set; } = "";
+    private string Password { get; set; } = "";
+    private string ErrorMessage { get; set; } = "";
+    private bool IsBusy { get; set; }
+    private bool IsPasswordMasked { get; set; } = true;
+
+    private void TogglePassword() => IsPasswordMasked = !IsPasswordMasked;
+
+    private async Task LoginAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Email) || !Regex.IsMatch(Email, @"^[^@\s]+@[^@\s]+\.[^@\s]+$"))
+        {
+            ErrorMessage = "Введите корректный формат Email";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(Password))
+        {
+            ErrorMessage = "Введите пароль";
+            return;
+        }
+
+        IsBusy = true;
+        ErrorMessage = string.Empty;
+
+        try
+        {
+            bool success = await AuthService.Login(Email, Password).WaitAsync(TimeSpan.FromSeconds(5));
+
+            if (success)
+            {
+                var userId = AuthService.CurrentUser.Id;
+                var userProfile = await AuthService.GetUserProfileAsync(userId);
+
+                if (userProfile != null)
+                {
+                    if (!userProfile.IsActive)
+                    {
+                        await AlertService.ShowAlertAsync("Доступ запрещен", "Учетная запись деактивирована.", "OK");
+                        await AuthService.LogoutAsync();
+                        return;
+                    }
+
+                    // Переход на главную (без проверок ключей чата)
+                    NavManager.NavigateTo("/overview", replace: true);
+                }
+                else
+                {
+                    await AlertService.ShowAlertAsync("Внимание", "Вам не назначена роль.", "OK");
+                    await AuthService.LogoutAsync();
+                }
+            }
+            else
+            {
+                ErrorMessage = "Неверный логин или пароль.";
+            }
+        }
+        catch (TimeoutException)
+        {
+            await AlertService.ShowAlertAsync("Ошибка связи", "Не удалось получить ответ от сервера.", "OK");
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"Ошибка: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+}

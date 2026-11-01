@@ -1,0 +1,467 @@
+﻿/* Изолированные стили только для страницы Карт */
+
+.map-page-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    overflow: hidden;
+}
+
+/* --- ШАПКА И ВЫРАВНИВАНИЕ КНОПОК --- */
+.page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px; /* Отступ от поиска */
+}
+
+    .page-header h1 {
+        margin: 0;
+    }
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+    /* Принудительно отменяем растягивание кнопок из глобальных стилей */
+    .header-actions button {
+        width: auto !important;
+        white-space: nowrap;
+        margin: 0;
+        padding: 0 35px; /* Делаем кнопку шире по горизонтали */
+        height: 45px; /* Фиксируем аккуратную высоту */
+    }
+
+.btn-outline {
+    background: transparent;
+    border: 1px solid gray;
+    color: var(--text-primary);
+    padding: 0 20px;
+    height: 45px;
+    border-radius: 12px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+    .btn-outline:hover {
+        background-color: var(--input-bg);
+        border-color: var(--text-primary);
+    }
+
+/* --- ПОИСК --- */
+        .search-wrapper {
+            display: flex;
+            align-items: center;
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 12px 20px;
+            margin-bottom: 20px; /* Отступ от таблицы */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        }
+
+            .search-wrapper i {
+                color: var(--teal);
+                margin-right: 12px;
+                font-size: 16px;
+            }
+
+            .search-wrapper input {
+                border: none;
+                background: transparent;
+                width: 100%;
+                color: var(--text-primary);
+                outline: none;
+                font-size: 15px;
+            }
+        /* --- КОНТЕЙНЕР ТАБЛИЦЫ --- */
+.table-scroll-container {
+    flex-grow: 1;
+    overflow-y: auto;
+    min-height: 0;
+    background-color: var(--card-bg);
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+        .table-card {
+            background: none;
+            box-shadow: none;
+            padding: 0;
+        }
+        /* --- КРАСИВАЯ ТАБЛИЦА --- */
+        .smart-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+
+            .smart-table th {
+                position: sticky;
+                top: 0;
+                background-color: var(--card-bg);
+                z-index: 10;
+                padding: 18px 20px;
+                color: gray;
+                font-size: 13px;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                border-bottom: 2px solid var(--input-bg);
+            }
+
+            .smart-table td {
+                padding: 16px 20px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+                vertical-align: middle;
+                color: var(--text-primary);
+            }
+
+            .smart-table tbody tr {
+                transition: background-color 0.2s;
+            }
+
+                .smart-table tbody tr:hover {
+                    background-color: rgba(255, 255, 255, 0.02);
+                }
+
+                .smart-table tbody tr:last-child td {
+                    border-bottom: none;
+                }
+
+.zone-name-cell {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* Уменьшил отступ, чтобы было компактнее */
+}
+
+    /* Иконка локации */
+    .zone-name-cell .fa-location-dot {
+        font-size: 16px;
+    }
+
+/* Кнопка сворачивания/разворачивания дерева */
+.btn-expand {
+    background: none;
+    border: none;
+    color: gray; /* Не броский цвет */
+    cursor: pointer;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: background-color 0.2s, color 0.2s;
+    padding: 0;
+    outline: none;
+}
+
+    .btn-expand:hover {
+        background-color: var(--input-bg);
+        color: var(--text-primary);
+    }
+
+    .btn-expand i {
+        transition: transform 0.2s ease;
+        font-size: 12px;
+    }
+
+        .btn-expand i.open {
+            transform: rotate(90deg); /* Поворот стрелки вниз при открытии */
+        }
+
+/* Заполнитель пустого места для элементов без детей (чтобы текст не съезжал) */
+.expand-spacer {
+    width: 24px;
+    height: 24px;
+}
+
+            .zone-name-cell i {
+                color: var(--teal);
+                font-size: 18px;
+            }
+
+        .badge-type {
+            background-color: var(--input-bg);
+            color: var(--text-primary);
+            padding: 5px 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        /* --- КАСТОМНЫЕ ВЫПАДАЮЩИЕ СПИСКИ --- */
+        .custom-select {
+            position: relative;
+            width: 100%;
+            user-select: none;
+        }
+
+        .select-selected {
+            background-color: var(--input-bg);
+            border-radius: 12px;
+            padding: 12px 15px;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .select-selected i {
+                color: gray;
+                transition: transform 0.2s;
+            }
+
+                .select-selected i.open {
+                    transform: rotate(180deg);
+                }
+
+        .select-items {
+            position: absolute;
+            background-color: var(--card-bg);
+            top: 110%;
+            left: 0;
+            right: 0;
+            z-index: 999;
+            border-radius: 12px;
+            border: 1px solid var(--input-bg);
+            box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .select-item {
+            padding: 12px 15px;
+            cursor: pointer;
+            border-bottom: 1px solid var(--input-bg);
+        }
+
+            .select-item:last-child {
+                border-bottom: none;
+            }
+
+            .select-item:hover {
+                background-color: var(--input-bg);
+            }
+
+/* --- ПОИСК ВНУТРИ ВЫПАДАЮЩЕГО СПИСКА --- */
+.select-items.with-search {
+    max-height: 280px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden; /* Убираем внешний скролл */
+}
+
+.select-search-box {
+    display: flex;
+    align-items: center;
+    padding: 12px 15px;
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--input-bg);
+}
+
+    .select-search-box input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        color: var(--text-primary);
+        outline: none;
+        margin-left: 10px;
+        font-size: 14px;
+    }
+
+.select-options-list {
+    overflow-y: auto; /* Скролл только для самого списка */
+    flex-grow: 1;
+}
+        /* --- СЕТКА ДЛЯ РЕДАКТОРА ТИПОВ (Модалка) --- */
+        .type-editor-grid {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 25px;
+            margin: 20px 0;
+            min-height: 350px;
+        }
+
+        .type-list-side {
+            border-right: 1px solid var(--input-bg);
+            padding-right: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 350px;
+            overflow-y: auto;
+        }
+
+        .type-item {
+            padding: 10px 12px;
+            border-radius: 10px;
+            background-color: var(--input-bg);
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.2s;
+            color: var(--text-primary);
+        }
+
+            .type-item.active {
+                background-color: var(--teal);
+                color: white;
+            }
+
+                .type-item.active .mini i {
+                    color: white;
+                }
+
+        .btn-add-type {
+            background: none;
+            border: 1px dashed var(--teal);
+            color: var(--teal);
+            padding: 10px;
+            border-radius: 10px;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: 0.2s;
+        }
+
+            .btn-add-type:hover {
+                background-color: rgba(0, 128, 128, 0.1);
+            }
+
+        .type-form-side {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .smart-input {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 15px;
+            color: var(--text-primary);
+            outline: none;
+        }
+
+        .row-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .wide {
+            max-width: 750px;
+        }
+        /* Кнопка сохранения типа (Адаптивная) */
+.btn-save-type {
+    width: 100%;
+    height: 50px !important;
+    min-height: 50px !important; /* Перебиваем минимальную высоту */
+    padding: 0 !important; /* Убиваем отступы глобального класса btn-confirm */
+    display: flex !important; /* Центрируем текст заново */
+    flex: none !important; /* Отменяем автоматическое распределение */
+    align-items: center;
+    justify-content: center;
+    margin-top: auto;
+}
+        /* --- Адаптивность для телефонов --- */
+        @media (max-width: 768px) {
+            .map-page-container {
+                height: calc(100vh - 180px);
+            }
+
+            .page-header {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 15px;
+            }
+
+            .header-actions {
+                flex-direction: column;
+            }
+
+                .header-actions button {
+                    width: 100% !important; /* На мобилках кнопки на всю ширину */
+                }
+
+            .type-editor-grid {
+                grid-template-columns: 1fr;
+                min-height: auto;
+            }
+
+            .type-list-side {
+                border-right: none;
+                border-bottom: 1px solid var(--input-bg);
+                padding-right: 0;
+                padding-bottom: 15px;
+                max-height: 200px;
+            }
+
+            .btn-save-type {
+                width: 100%;
+                height: 50px !important; /* Увеличиваем высоту */
+                min-height: 50px !important; /* Закрепляем минимальную высоту */
+                padding: 0 !important
+            }
+        }
+
+/* --- СТИЛИ ДЛЯ ВСПЛЫВАЮЩЕЙ ПОДСКАЗКИ ТИПА --- */
+.badge-type {
+    position: relative;
+    display: inline-block;
+}
+
+    /* Меняем курсор на "помощь" (вопросик), если есть описание */
+    .badge-type.has-tooltip {
+        cursor: help;
+    }
+
+.tooltip-text {
+    visibility: hidden;
+    width: 220px; /* Фиксированная ширина для длинных описаний */
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    text-align: left;
+    border-radius: 12px;
+    padding: 12px;
+    position: absolute;
+    z-index: 100;
+    bottom: 140%; /* Появляется над элементом */
+    left: 50%;
+    transform: translateX(-50%);
+    opacity: 0;
+    transition: opacity 0.3s, bottom 0.3s;
+    box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+    border: 1px solid var(--input-bg);
+    font-size: 12px;
+    line-height: 1.5;
+    pointer-events: none; /* Чтобы подсказка не мешала кликам */
+    white-space: normal; /* Разрешаем перенос строк */
+}
+
+    /* Стрелочка внизу подсказки */
+    .tooltip-text::after {
+        content: "";
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        margin-left: -6px;
+        border-width: 6px;
+        border-style: solid;
+        border-color: var(--input-bg) transparent transparent transparent;
+    }
+
+/* Показ при наведении */
+.badge-type:hover .tooltip-text {
+    visibility: visible;
+    opacity: 1;
+    bottom: 125%; /* Легкий эффект "подъема" при появлении */
+}

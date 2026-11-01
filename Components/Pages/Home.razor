@@ -1,0 +1,75 @@
+﻿@page "/"
+@layout Components.Layout.AuthLayout
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+
+<div class="loading-container">
+    <img src="logo.png" alt="Smart Arena Logo" class="loading-logo" />
+    <div class="loader"></div>
+    <div class="loading-text">Загрузка SmartArena</div>
+</div>
+
+@code {
+    protected override void OnInitialized()
+    {
+        // Оставляем пустым. UI просто покажет вашу верстку с лоадером.
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // 1. Спрашиваем разрешения в главном потоке ОС
+                await CheckAndRequestNotificationPermission();
+
+                // 2. Восстанавливаем сессию
+                bool isRestored = await AuthService.RestoreSessionAsync();
+
+                if (isRestored && AuthService.CurrentUser != null)
+                {
+                    NavManager.NavigateTo("/overview");
+                }
+                else
+                {
+                    NavManager.NavigateTo("/login");
+                }
+            }
+            catch (Exception ex)
+            {
+                await AlertService.ShowAlertAsync("Ошибка", $"Токен устарел. {ex.Message}", "OK");
+                NavManager.NavigateTo("/login");
+            }
+        }
+    }
+
+    private async Task CheckAndRequestNotificationPermission()
+    {
+#if ANDROID || WINDOWS
+        // Оборачиваем в MainThread для безопасного вызова нативного UI
+        await MainThread.InvokeOnMainThreadAsync(async () =>
+        {
+            var status = await Microsoft.Maui.ApplicationModel.Permissions.CheckStatusAsync<Microsoft.Maui.ApplicationModel.Permissions.PostNotifications>();
+
+            if (status != Microsoft.Maui.ApplicationModel.PermissionStatus.Granted)
+            {
+                bool wantsToGrant = await AlertService.ShowAlertAsync(
+                    "Уведомления",
+                    "SmartArena использует системные уведомления, чтобы вы мгновенно узнавали о новых задачах и срочных сообщениях от коллег. Без этого вы можете пропустить важные события на стадионе. Разрешить отправку?",
+                    "Да, разрешить",
+                    "Позже"
+                );
+
+                if (wantsToGrant)
+                {
+                    await Microsoft.Maui.ApplicationModel.Permissions.RequestAsync<Microsoft.Maui.ApplicationModel.Permissions.PostNotifications>();
+                }
+            }
+        });
+#endif
+    }
+}

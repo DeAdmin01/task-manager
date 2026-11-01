@@ -1,0 +1,296 @@
+﻿.overview-container {
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 100px);
+    overflow-y: auto;
+    padding-right: 10px;
+}
+
+.loading-state {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    color: var(--teal);
+    font-size: 40px;
+}
+
+/* --- ШАПКА --- */
+.welcome-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 30px;
+    background: var(--card-bg);
+    padding: 25px 30px;
+    border-radius: 20px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+}
+
+    .welcome-header h1 {
+        margin: 0 0 5px 0;
+        font-size: 26px;
+        color: var(--text-primary);
+    }
+
+    .welcome-header p {
+        margin: 0;
+        color: gray;
+        font-size: 15px;
+    }
+
+.date-badge {
+    background: var(--input-bg);
+    padding: 8px 15px;
+    border-radius: 12px;
+    color: var(--text-primary);
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+/* --- СЕТКА КАРТОЧЕК --- */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 25px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    transition: transform 0.2s;
+    border: 1px solid rgba(255,255,255,0.02);
+}
+
+    .stat-card:hover {
+        transform: translateY(-5px);
+    }
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 24px;
+    color: white;
+}
+
+.in-progress .stat-icon {
+    background: linear-gradient(135deg, #0A84FF, #0050B3);
+}
+
+.completed .stat-icon {
+    background: linear-gradient(135deg, #32D74B, #208A2F);
+}
+
+.critical .stat-icon {
+    background: linear-gradient(135deg, #FF453A, #B32015);
+}
+
+.efficiency .stat-icon {
+    background: linear-gradient(135deg, var(--teal), #004D4D);
+}
+
+.stat-info h3 {
+    margin: 0 0 5px 0;
+    font-size: 14px;
+    color: gray;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.stat-value {
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--text-primary);
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.efficiency-sub {
+    font-size: 13px;
+    color: gray;
+    font-weight: normal;
+}
+
+/* Полоса прогресса эффективности */
+.efficiency-bar-bg {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: var(--input-bg);
+}
+
+.efficiency-bar-fill {
+    height: 100%;
+    border-top-right-radius: 6px;
+    border-bottom-right-radius: 6px;
+    transition: width 1s ease-out;
+}
+
+/* --- УВЕДОМЛЕНИЯ --- */
+.notifications-section {
+    background: var(--card-bg);
+    border-radius: 20px;
+    padding: 25px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    flex-grow: 1;
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--input-bg);
+}
+
+    .section-header h2 {
+        margin: 0;
+        font-size: 20px;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+.btn-mark-all {
+    background: transparent;
+    border: 1px solid var(--teal);
+    color: var(--teal);
+    padding: 8px 15px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: bold;
+    transition: 0.2s;
+}
+
+    .btn-mark-all:hover {
+        background: rgba(0, 128, 128, 0.1);
+    }
+
+.notifications-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.empty-state {
+    text-align: center;
+    color: gray;
+    padding: 40px 0;
+}
+
+    .empty-state i {
+        font-size: 40px;
+        margin-bottom: 10px;
+        opacity: 0.5;
+    }
+
+.notification-card {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 15px 20px;
+    border-radius: 15px;
+    background: var(--input-bg);
+    transition: 0.2s;
+    border-left: 4px solid transparent;
+}
+
+    .notification-card.unread {
+        background: rgba(0, 128, 128, 0.05);
+        border-left-color: var(--teal);
+    }
+
+    .notification-card:hover {
+        background: rgba(255,255,255,0.05);
+    }
+
+.notif-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--card-bg);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-size: 18px;
+}
+
+.notif-content {
+    flex-grow: 1;
+    cursor: pointer;
+}
+
+    .notif-content h4 {
+        margin: 0 0 5px 0;
+        font-size: 16px;
+        color: var(--text-primary);
+    }
+
+    .notif-content p {
+        margin: 0 0 5px 0;
+        font-size: 14px;
+        color: var(--text-secondary);
+    }
+
+.notif-date {
+    font-size: 12px;
+    color: gray;
+}
+
+.btn-read-single {
+    background: none;
+    border: none;
+    color: var(--teal);
+    font-size: 24px;
+    cursor: pointer;
+    opacity: 0.5;
+    transition: 0.2s;
+}
+
+    .btn-read-single:hover {
+        opacity: 1;
+        transform: scale(1.1);
+    }
+
+@media (max-width: 768px) {
+    .welcome-header {
+        flex-direction: column;
+        gap: 15px;
+    }
+
+    .stats-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .notification-card {
+        flex-direction: column;
+        align-items: flex-start;
+        position: relative;
+    }
+
+    .btn-read-single {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+    }
+}

@@ -1,0 +1,201 @@
+﻿@page "/roles"
+@using SmartArena.Models
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject AuthService AuthService
+@inject IAlertService AlertService
+
+<div class="page-header">
+    <h1>Роли и разрешения</h1>
+    <p class="subtitle" style="text-align: left;">Управление уровнями доступа сотрудников</p>
+</div>
+
+<div class="roles-grid">
+    <div class="content-card role-item-card add-new-role" @onclick="OpenAddRoleModal">
+        <div class="add-role-content">
+            <i class="fa-solid fa-circle-plus add-icon"></i>
+            <span>Создать роль</span>
+        </div>
+    </div>
+
+    @foreach (var role in RolesList)
+    {
+        <div class="content-card role-item-card">
+            <div class="role-card-header">
+                <h3>@role.Name</h3>
+                <div class="role-actions">
+                    <button class="icon-action-btn edit" @onclick="() => OpenRenameRoleModal(role)" title="Переименовать">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="icon-action-btn delete" @onclick="() => DeleteRole(role)" title="Удалить">
+                        <i class="fa-solid fa-trash-can"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="role-card-body">
+                <button class="btn-primary small-btn w-100" @onclick="() => ManagePermissions(role)">
+                    <i class="fa-solid fa-shield-halved"></i> Настроить права
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@if (IsPermissionsModalOpen)
+{
+    <div class="modal-overlay">
+        <div class="modal-card wide">
+            <h3>Разрешения: @SelectedRole?.Name</h3>
+            <div class="permissions-list">
+                @foreach (var perm in AllPermissions)
+                {
+                    <label class="permission-item">
+                        <input type="checkbox"
+                               checked="@CurrentRolePermIds.Contains(perm.Id)"
+                               @onchange="(e) => TogglePermission(perm.Id, (bool)e.Value)" />
+                        <span class="perm-text" style="display: flex; flex-direction: column;">
+                            <span class="perm-code">@perm.Codename</span>
+                            <span class="perm-desc">@perm.Description</span>
+                        </span>
+                    </label>
+                }
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsPermissionsModalOpen = false">Отмена</button>
+                <button class="btn-confirm" @onclick="SavePermissions">Сохранить</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (IsRoleNameModalOpen)
+{
+    <div class="modal-overlay">
+        <div class="modal-card">
+            <h3 class="modal-title">@(IsEditingRole ? "Переименовать роль" : "Создать новую роль")</h3>
+            <div class="input-field">
+                <label>Название роли</label>
+                <div class="input-wrapper">
+                    <input type="text" @bind="RoleNameInput" placeholder="Например: Менеджер" />
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsRoleNameModalOpen = false">Отмена</button>
+                <button class="btn-confirm" @onclick="SaveRoleName">Сохранить</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<UserRole> RolesList = new();
+    private List<Permission> AllPermissions = new();
+    private List<int> CurrentRolePermIds = new();
+    private UserRole? SelectedRole;
+    
+    private bool IsPermissionsModalOpen;
+    private bool IsRoleNameModalOpen;
+    private bool IsEditingRole;
+    private string RoleNameInput = "";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRolesAsync();
+        AllPermissions = await AuthService.GetAllPermissionsAsync();
+    }
+
+    private async Task LoadRolesAsync()
+    {
+        RolesList = await AuthService.GetAllRolesAsync();
+    }
+
+    // --- ПРАВА ---
+    private async Task ManagePermissions(UserRole role)
+    {
+        SelectedRole = role;
+        CurrentRolePermIds = await AuthService.GetRolePermissionIdsAsync(role.Id.Value);
+        IsPermissionsModalOpen = true;
+    }
+
+    private void TogglePermission(int id, bool isChecked)
+    {
+        if (isChecked && !CurrentRolePermIds.Contains(id)) CurrentRolePermIds.Add(id);
+        else if (!isChecked) CurrentRolePermIds.Remove(id);
+    }
+
+    private async Task SavePermissions()
+    {
+        try
+        {
+            await AuthService.UpdateRolePermissionsAsync(SelectedRole.Id.Value, CurrentRolePermIds);
+            await AlertService.ShowAlertAsync("Успех", "Разрешения успешно сохранены.", "OK");
+            IsPermissionsModalOpen = false;
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+        }
+    }
+
+    // --- УПРАВЛЕНИЕ РОЛЯМИ ---
+    private void OpenAddRoleModal()
+    {
+        IsEditingRole = false;
+        SelectedRole = null;
+        RoleNameInput = "";
+        IsRoleNameModalOpen = true;
+    }
+
+    private void OpenRenameRoleModal(UserRole role)
+    {
+        IsEditingRole = true;
+        SelectedRole = role;
+        RoleNameInput = role.Name ?? "";
+        IsRoleNameModalOpen = true;
+    }
+
+    private async Task SaveRoleName()
+    {
+        if (string.IsNullOrWhiteSpace(RoleNameInput)) return;
+
+        try
+        {
+            if (IsEditingRole && SelectedRole != null)
+            {
+                await AuthService.RenameRoleAsync(SelectedRole.Id.Value, RoleNameInput);
+            }
+            else
+            {
+                await AuthService.AddRoleAsync(RoleNameInput);
+            }
+            
+            await LoadRolesAsync();
+            IsRoleNameModalOpen = false;
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+        }
+    }
+
+    private async Task DeleteRole(UserRole role)
+    {
+        bool confirm = await AlertService.ShowAlertAsync("Удаление роли",
+            $"Вы уверены, что хотите удалить роль '{role.Name}'? Все пользователи с этой ролью станут 'Гостями'.",
+            "Удалить", "Отмена");
+            
+        if (confirm)
+        {
+            try
+            {
+                await AuthService.DeleteRoleAsync(role.Id.Value);
+                await LoadRolesAsync();
+            }
+            catch (Exception ex)
+            {
+                await AlertService.ShowAlertAsync("Ошибка", ex.Message, "OK");
+            }
+        }
+    }
+}

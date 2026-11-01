@@ -1,0 +1,19 @@
+/* Анимация перехода для страниц */
+.page-transition-wrapper {
+    animation: fadeSlideUp 0.3s cubic-bezier(0.25, 0.8, 0.25, 1) forwards;
+    /* Убедимся, что контейнер занимает всю высоту */
+    height: 100%;
+    width: 100%;
+}
+
+@keyframes fadeSlideUp {
+    0% {
+        opacity: 0;
+        transform: translateY(15px); /* Легкое смещение вниз в начале */
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0); /* Возврат в нормальное положение */
+    }
+}

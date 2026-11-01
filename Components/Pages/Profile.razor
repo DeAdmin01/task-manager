@@ -1,0 +1,151 @@
+﻿@page "/profile"
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject AuthService AuthService
+@inject IAlertService AlertService
+@inject NavigationManager NavManager
+
+<div class="page-header">
+    <h1>Профиль</h1>
+</div>
+
+<div class="profile-container">
+    <div class="profile-main-card">
+        <div class="profile-avatar-large">
+            @UserInitials
+        </div>
+        <h2 class="profile-name-display">@UserName</h2>
+        <span class="profile-role-badge">@UserRole</span>
+
+        <div class="profile-divider"></div>
+
+        <div class="profile-actions">
+            <button class="btn-action primary" @onclick='() => NavManager.NavigateTo("/profile/edit")'>
+                <i class="fa-solid fa-pen-to-square"></i> Редактировать
+            </button>
+
+            @if (CanManageUsers)
+            {
+                <button class="btn-action secondary" @onclick='() => NavManager.NavigateTo("/staff")'>
+                    <i class="fa-solid fa-users-gear"></i> Сотрудники
+                </button>
+            }
+            @if (CanManageSettings)
+            {
+                <button class="btn-action secondary" @onclick='() => NavManager.NavigateTo("/roles")'>
+                    <i class="fa-solid fa-user-shield"></i> Роли и права
+                </button>
+            }
+
+            <button class="btn-action danger"
+                    @onmousedown="OnPressDown" @ontouchstart="OnPressDown"
+                    @onmouseup="OnPressUp" @ontouchend="OnPressUp"
+                    @onmouseleave="OnPressCancel" @ontouchcancel="OnPressCancel">
+                <i class="fa-solid fa-right-from-bracket"></i> Выйти
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string UserName = "Загрузка...";
+    private string UserRole = "...";
+    private string UserInitials = "--";
+    private bool CanManageUsers = false;
+    private bool CanManageSettings = false;
+    private CancellationTokenSource? _pressTokenSource;
+    private bool _isLongPressExecuted = false;
+    private bool _isPressing = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var data = await AuthService.GetCurrentUserProfileWithRoleAsync();
+        if (data.Profile != null)
+        {
+            UserName = data.Profile.FullName ?? AuthService.CurrentUser?.Email ?? "Пользователь";
+            UserRole = data.RoleName;
+            UserInitials = GetInitials(UserName);
+        }
+        CanManageUsers = await AuthService.UserHasPermissionAsync("user.manage");
+        CanManageSettings = await AuthService.UserHasPermissionAsync("settings.manage");
+    }
+
+    private string GetInitials(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return "--";
+        var parts = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length > 1
+            ? $"{parts[0][0]}{parts[1][0]}".ToUpper()
+            : name.Substring(0, Math.Min(2, name.Length)).ToUpper();
+    }
+
+    private async Task OnPressDown()
+    {
+        // Защита от двойного срабатывания, если мобильное устройство
+        // генерирует одновременно touchstart и mousedown
+        if (_isPressing) return;
+
+        _isPressing = true;
+        _isLongPressExecuted = false;
+        _pressTokenSource = new CancellationTokenSource();
+
+        try
+        {
+            // Ждем 5 секунд (5000 миллисекунд)
+            await Task.Delay(5000, _pressTokenSource.Token);
+
+            // Если мы дошли до этой строчки и задача не отменилась,
+            // значит прошло ровно 5 секунд удержания.
+            _isLongPressExecuted = true;
+
+            // Сбрасываем флаг нажатия
+            _isPressing = false;
+            bool confirm = await AlertService.ShowAlertAsync("Отладка", "Вы уверены, что хотите открыть страницу отладки?", "Да", "Отмена");
+            // Выполняем другой функционал
+            if(confirm)NavManager.NavigateTo("/Debug");
+        }
+        catch (TaskCanceledException)
+        {
+            // Срабатывает, когда мы вызываем _pressTokenSource.Cancel()
+            // (то есть пользователь отпустил кнопку раньше 5 секунд)
+        }
+    }
+
+    // 2. Конец нажатия (отпустили кнопку)
+    private async Task OnPressUp()
+    {
+        if (!_isPressing) return;
+        _isPressing = false;
+
+        // Отменяем таймер 5 секунд
+        _pressTokenSource?.Cancel();
+
+        // Если долгое нажатие не сработало (держали меньше 5 сек),
+        // выполняем обычный выход
+        if (!_isLongPressExecuted)
+        {
+            await LogoutAsync();
+        }
+    }
+
+    // 3. Отмена нажатия (увели курсор/палец за пределы кнопки)
+    private void OnPressCancel()
+    {
+        if (!_isPressing) return;
+        _isPressing = false;
+
+        // Просто отменяем таймер, ничего не выполняем
+        _pressTokenSource?.Cancel();
+    }
+
+    private async Task LogoutAsync()
+    {
+        bool confirm = await AlertService.ShowAlertAsync("Выход", "Вы уверены, что хотите выйти?", "Да", "Отмена");
+        if (confirm)
+        {
+            await AuthService.LogoutAsync();
+            SecureStorage.Default.RemoveAll();
+            NavManager.NavigateTo("/login");
+        }
+    }
+}

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>SmartArena</title>
+    <base href="/" />
+    <link rel="stylesheet" href="app.css" />
+    <link rel="stylesheet" href="SmartArena.styles.css" />
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="css/all.min.css" />
+
+    <style>
+        /* Переменные для экрана загрузки (Светлая тема по умолчанию, синхронизировано с app.css) */
+        :root {
+            --loader-bg: #F5F6FA;
+            --loader-text: #1C1C1E;
+            --loader-glow: rgba(0, 128, 128, 0.3); /* Бирюзовое свечение (var(--teal)) */
+            --loader-ring: rgba(0, 0, 0, 0.1);
+            --loader-spin: #008080; /* Бирюзовый спиннер */
+        }
+
+        /* Переменные для Темной темы */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --loader-bg: #0F0F11;
+                --loader-text: #FFFFFF;
+                --loader-glow: rgba(255, 255, 255, 0.2); /* Белое свечение */
+                --loader-ring: rgba(255, 255, 255, 0.1);
+                --loader-spin: #ffffff; /* Белый спиннер */
+            }
+        }
+
+        /* Стили для фона загрузки */
+        .loading-container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: var(--loader-bg);
+            color: var(--loader-text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Анимация логотипа */
+        .loading-logo {
+            width: 120px;
+            height: auto;
+            margin-bottom: 25px;
+            /* Эффект пульсирующего свечения использует переменную */
+            filter: drop-shadow(0 0 10px var(--loader-glow));
+            animation: pulse-glow 2s infinite ease-in-out;
+        }
+
+        /* Спиннер загрузки */
+        .loader {
+            width: 40px;
+            height: 40px;
+            border: 3px solid var(--loader-ring);
+            border-radius: 50%;
+            border-top-color: var(--loader-spin);
+            animation: spin 1s ease-in-out infinite;
+            box-shadow: 0 0 15px var(--loader-glow);
+        }
+
+        .loading-text {
+            margin-top: 20px;
+            font-size: 1.1rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            font-weight: 300;
+            opacity: 0.8;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% {
+                transform: scale(1);
+                filter: drop-shadow(0 0 10px var(--loader-glow));
+            }
+
+            50% {
+                transform: scale(1.05);
+                filter: drop-shadow(0 0 25px calc(var(--loader-glow) * 1.5)); /* Усиливаем свечение на пике пульсации */
+            }
+        }
+    </style>
+
+</head>
+<body>
+
+    <div class="status-bar-safe-area"></div>
+
+    <div id="app">
+        <div class="loading-container">
+            <img src="logo.png" alt="SmartArena Logo" class="loading-logo" />
+
+            <div class="loader"></div>
+
+            <div class="loading-text">Загрузка SmartArena</div>
+        </div>
+    </div>
+
+    <script src="_framework/blazor.webview.js" autostart="false"></script>
+</body>
+</html>

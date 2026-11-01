@@ -1,0 +1,687 @@
+﻿@page "/tasks"
+@using SmartArena.Models
+@using SmartArena.Services
+@using SmartArena.Interfaces
+@inject SupabaseService SupabaseService
+@inject AuthService AuthService
+@inject IAlertService AlertService
+
+<div class="tasks-page-container">
+    <div class="page-header">
+        <h1>Управление задачами</h1>
+        @if (_canCreate && !IsLoading && HasTaskAccess)
+        {
+            <button class="btn-primary" @onclick="OpenCreateModal">
+                <i class="fa-solid fa-plus"></i> Создать задачу
+            </button>
+        }
+    </div>
+
+    @if (IsLoading)
+    {
+        <div class="loading-state">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+        </div>
+    }
+    else if (!HasTaskAccess)
+    {
+        <div class="access-denied-state">
+            <i class="fa-solid fa-lock"></i>
+            <h2>Доступ запрещен</h2>
+            <p>У вас нет прав для работы с системой заявок.</p>
+        </div>
+    }
+    else
+    {
+        @* --- ПАНЕЛЬ ФИЛЬТРОВ --- *@
+        <div class="filters-bar" @onclick="CloseAllFilterDropdowns">
+            <div class="search-input" @onclick:stopPropagation>
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" placeholder="Поиск по названию..." @bind="SearchText" @bind:event="oninput" />
+            </div>
+
+            <div class="filter-group">
+                <div class="custom-select" @onclick:stopPropagation>
+                    <div class="select-selected" @onclick="ToggleFilterStatus">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            @if (FilterStatusId == 0)
+                            {
+                                <span>Все статусы</span>
+                            }
+                            else
+                            {
+                                var st = Statuses.FirstOrDefault(s => s.Id == FilterStatusId);
+                                <span class="color-dot" style="background-color: @(st?.HexColor ?? "transparent")"></span>
+                                <span>@st?.Name</span>
+                            }
+                        </div>
+                        <i class="fa-solid fa-chevron-down @(IsFilterStatusOpen ? "open" : "")"></i>
+                    </div>
+                    @if (IsFilterStatusOpen)
+                    {
+                        <div class="select-items">
+                            <div class="select-item" @onclick="() => { FilterStatusId = 0; IsFilterStatusOpen = false; }">Все статусы</div>
+                            @foreach (var s in Statuses)
+                            {
+                                <div class="select-item" @onclick="() => { FilterStatusId = s.Id; IsFilterStatusOpen = false; }">
+                                    <span class="color-dot" style="background-color: @s.HexColor"></span> @s.Name
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <div class="custom-select" @onclick:stopPropagation>
+                    <div class="select-selected" @onclick="ToggleFilterPriority">
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            @if (FilterPriorityId == 0)
+                            {
+                                <span>Все приоритеты</span>
+                            }
+                            else
+                            {
+                                var pr = Priorities.FirstOrDefault(p => p.Id == FilterPriorityId);
+                                <span class="color-dot" style="background-color: @(pr?.HexColor ?? "transparent")"></span>
+                                <span>@pr?.Name</span>
+                            }
+                        </div>
+                        <i class="fa-solid fa-chevron-down @(IsFilterPriorityOpen ? "open" : "")"></i>
+                    </div>
+                    @if (IsFilterPriorityOpen)
+                    {
+                        <div class="select-items">
+                            <div class="select-item" @onclick="() => { FilterPriorityId = 0; IsFilterPriorityOpen = false; }">Все приоритеты</div>
+                            @foreach (var p in Priorities)
+                            {
+                                <div class="select-item" @onclick="() => { FilterPriorityId = p.Id; IsFilterPriorityOpen = false; }">
+                                    <span class="color-dot" style="background-color: @p.HexColor"></span> @p.Name
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* --- СПИСОК ЗАДАЧ --- *@
+        <div class="tasks-scroll-area">
+            <div class="tasks-grid">
+                @foreach (var task in FilteredTickets)
+                {
+                    var status = Statuses.FirstOrDefault(s => s.Id == task.StatusId);
+                    var priority = Priorities.FirstOrDefault(p => p.Id == task.PriorityId);
+                    var zone = Zones.FirstOrDefault(z => z.Id.ToString() == task.ZoneId?.ToString());
+                    var assignee = AllProfiles.FirstOrDefault(p => p.Id.ToString() == task.AssigneeId?.ToString());
+
+                    <div class="task-card" @onclick="() => OpenDetailsModal(task)">
+                        <div class="task-card-header">
+                            <span class="priority-tag" style="background-color: @(priority?.HexColor ?? "#ccc")" title="Приоритет: @priority?.Name"></span>
+                            <span class="status-badge" style="color: @(status?.HexColor ?? "#fff"); border-color: @(status?.HexColor ?? "#fff")">
+                                @status?.Name
+                            </span>
+                            <span class="task-date">@task.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                        </div>
+
+                        <h3 class="task-title">@task.Title</h3>
+                        
+                        <div class="task-meta-dates">
+                            <p class="task-zone"><i class="fa-solid fa-location-dot"></i> @(zone?.Name ?? "Локация не указана")</p>
+                            @if (task.ClosedAt.HasValue)
+                            {
+                                <p class="task-closed-date" title="Время закрытия"><i class="fa-solid fa-flag-checkered"></i> @task.ClosedAt.Value.ToLocalTime().ToString("dd.MM HH:mm")</p>
+                            }
+                            @if (task.VerifiedAt.HasValue)
+                            {
+                                <p class="task-verified-date" title="Время проверки"><i class="fa-solid fa-check-double"></i> @task.VerifiedAt.Value.ToLocalTime().ToString("dd.MM HH:mm")</p>
+                            }
+                        </div>
+
+                        <div class="task-card-footer" @onclick:stopPropagation>
+                            <div class="assignee-info" @onclick="() => OpenDetailsModal(task)">
+                                @if (assignee != null)
+                                {
+                                    <div class="mini-avatar">@GetInitials(assignee.FullName)</div>
+                                    <span>@assignee.FullName</span>
+                                }
+                                else
+                                {
+                                    <span class="no-assignee">Без исполнителя</span>
+                                }
+                            </div>
+                            
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-icon" @onclick="() => OpenHistoryModal(task)" title="История задачи">
+                                    <i class="fa-solid fa-clock-rotate-left"></i>
+                                </button>
+                                <button class="btn-icon" @onclick="() => OpenDetailsModal(task)" style="color: var(--teal);">
+                                    <i class="fa-solid fa-chevron-right"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }
+                @if (!FilteredTickets.Any())
+                {
+                    <div style="grid-column: 1 / -1; text-align: center; color: gray; padding: 40px 0;">
+                        Задачи не найдены
+                    </div>
+                }
+            </div>
+        </div>
+    }
+</div>
+
+@* --- МОДАЛКА: СОЗДАНИЕ / РЕДАКТИРОВАНИЕ --- *@
+@if (IsModalOpen)
+{
+    <div class="modal-overlay" @onclick="CloseAllModalDropdowns">
+        <div class="modal-card wide" @onclick:stopPropagation>
+            <h3 class="modal-title">@(IsNewTask ? "Новая задача" : "Детали задачи")</h3>
+
+            <div class="modal-grid">
+                <div class="main-info">
+                    <div class="input-field">
+                        <label>Заголовок</label>
+                        <input type="text" @bind="CurrentTask.Title" readonly="@(!CanEditCore)" class="smart-input" placeholder="Краткая суть проблемы" />
+                    </div>
+                    <div class="input-field" style="flex-grow: 1;">
+                        <label>Описание</label>
+                        <textarea @bind="CurrentTask.Description" readonly="@(!CanEditCore)" class="smart-input" rows="5" style="height: 100%; resize: none;" placeholder="Подробное описание..."></textarea>
+                    </div>
+
+                    @if (!IsNewTask && !string.IsNullOrEmpty(CurrentTask.ResolutionNote))
+                    {
+                        <div class="resolution-view">
+                            <label>Отчет исполнителя:</label>
+                            <p>@CurrentTask.ResolutionNote</p>
+                        </div>
+                    }
+
+                    @if (IsExecutor && CurrentTask.StatusId <= 3)
+                    {
+                        <div class="input-field resolution-input" style="margin-top: 15px;">
+                            <label>Ваш отчет о выполнении (Обязательно для закрытия)</label>
+                            <textarea @bind="CurrentTask.ResolutionNote" class="smart-input" placeholder="Опишите, что было сделано..."></textarea>
+                        </div>
+                    }
+                </div>
+
+                <div class="side-info">
+                    <div class="input-field">
+                        <label>Статус</label>
+                        <div class="custom-select @(CanChangeStatus ? "" : "disabled")" @onclick:stopPropagation>
+                            <div class="select-selected" @onclick="() => { if(CanChangeStatus) ToggleModalDropdown(ref IsModalStatusOpen); }">
+                                @if (CurrentStatus != null)
+                                {
+                                    <div class="status-badge-inline" style="border-color: @CurrentStatus.HexColor; color: @CurrentStatus.HexColor;">
+                                        <span class="color-dot" style="background-color: @CurrentStatus.HexColor; margin-right: 6px;"></span> @CurrentStatus.Name
+                                    </div>
+                                }
+                                <i class="fa-solid fa-chevron-down @(IsModalStatusOpen ? "open" : "")"></i>
+                            </div>
+                            @if (IsModalStatusOpen && CanChangeStatus)
+                            {
+                                <div class="select-items">
+                                    @foreach (var s in Statuses)
+                                    {
+                                        <div class="select-item" @onclick="() => { CurrentTask.StatusId = s.Id; IsModalStatusOpen = false; }">
+                                            <span class="color-dot" style="background-color: @s.HexColor"></span> @s.Name
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @if (!IsNewTask && _originalStatusId != CurrentTask.StatusId)
+                    {
+                        <div class="input-field animate-fade-in" style="margin-top: 10px;">
+                            <label>Причина смены статуса</label>
+                            <input type="text" @bind="HistoryComment" class="smart-input" placeholder="Напр: Возврат на доработку / Готово" />
+                        </div>
+                    }
+
+                    <div class="input-field">
+                        <label>Приоритет</label>
+                        <div class="custom-select @(CanEditCore ? "" : "disabled")" @onclick:stopPropagation>
+                            <div class="select-selected" @onclick="() => { if(CanEditCore) ToggleModalDropdown(ref IsModalPriorityOpen); }">
+                                <div style="display:flex; align-items:center;">
+                                    <span class="color-dot" style="background-color: @(CurrentPriority?.HexColor ?? "transparent")"></span>
+                                    <span>@(CurrentPriority?.Name ?? "Выберите...")</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-down @(IsModalPriorityOpen ? "open" : "")"></i>
+                            </div>
+                            @if (IsModalPriorityOpen && CanEditCore)
+                            {
+                                <div class="select-items">
+                                    @foreach (var p in Priorities)
+                                    {
+                                        <div class="select-item" @onclick="() => { CurrentTask.PriorityId = p.Id; IsModalPriorityOpen = false; }">
+                                            <span class="color-dot" style="background-color: @p.HexColor"></span> @p.Name
+                                        </div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label>Локация (Зона)</label>
+                        <div class="custom-select @(CanEditCore ? "" : "disabled")" @onclick:stopPropagation>
+                            <div class="select-selected" @onclick="() => { if (CanEditCore) { ToggleModalDropdown(ref IsModalZoneOpen); ZoneSearchText = string.Empty; } }">
+                                <span>@(Zones.FirstOrDefault(z => z.Id.ToString() == CurrentTask.ZoneId?.ToString())?.Name ?? "Не выбрана")</span>
+                                <i class="fa-solid fa-chevron-down @(IsModalZoneOpen ? "open" : "")"></i>
+                            </div>
+                            @if (IsModalZoneOpen && CanEditCore)
+                            {
+                                <div class="select-items with-search">
+                                    <div class="select-search-box" @onclick:stopPropagation>
+                                        <i class="fa-solid fa-search"></i>
+                                        <input type="text" placeholder="Поиск зоны..." @bind="ZoneSearchText" @bind:event="oninput" />
+                                    </div>
+                                    <div class="select-options-list">
+                                        <div class="select-item" @onclick="() => { CurrentTask.ZoneId = null; IsModalZoneOpen = false; }">Без локации</div>
+                                        @foreach (var z in FilteredZones)
+                                        {
+                                            <div class="select-item" @onclick="() => { CurrentTask.ZoneId = z.Id.ToString(); IsModalZoneOpen = false; }">@z.Name</div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    <div class="input-field">
+                        <label>Исполнитель</label>
+                        <div class="custom-select @(HasAssignPermission ? "" : "disabled")" @onclick:stopPropagation>
+                            <div class="select-selected" @onclick="() => { if (HasAssignPermission) { ToggleModalDropdown(ref IsModalAssigneeOpen); AssigneeSearchText = string.Empty; } }">
+                                <span>@(ExecutableProfiles.FirstOrDefault(p => p.Id.ToString() == CurrentTask.AssigneeId?.ToString())?.FullName ?? "Не назначен")</span>
+                                <i class="fa-solid fa-chevron-down @(IsModalAssigneeOpen ? "open" : "")"></i>
+                            </div>
+                            @if (IsModalAssigneeOpen && HasAssignPermission)
+                            {
+                                <div class="select-items with-search">
+                                    <div class="select-search-box" @onclick:stopPropagation>
+                                        <i class="fa-solid fa-search"></i>
+                                        <input type="text" placeholder="Поиск сотрудника..." @bind="AssigneeSearchText" @bind:event="oninput" />
+                                    </div>
+                                    <div class="select-options-list">
+                                        <div class="select-item" @onclick="() => { CurrentTask.AssigneeId = null; IsModalAssigneeOpen = false; }">Снять исполнителя</div>
+                                        @foreach (var user in FilteredAssignees)
+                                        {
+                                            <div class="select-item" @onclick="() => { CurrentTask.AssigneeId = user.Id.ToString(); IsModalAssigneeOpen = false; }">
+                                                @user.FullName
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-actions">
+                <button class="btn-cancel" @onclick="() => IsModalOpen = false">Закрыть</button>
+                @if (CanSave)
+                {
+                    <button class="btn-confirm" @onclick="SaveTask">Сохранить</button>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@* --- МОДАЛКА: ИСТОРИЯ --- *@
+@if (IsHistoryModalOpen)
+{
+    <div class="modal-overlay" @onclick="() => IsHistoryModalOpen = false">
+        <div class="modal-card" @onclick:stopPropagation style="max-width: 500px;">
+            <h3 class="modal-title">История изменений</h3>
+            
+            <div class="history-timeline">
+                @if (!CurrentTaskHistory.Any())
+                {
+                    <p style="text-align: center; color: gray; padding: 20px;">История пуста</p>
+                }
+                else
+                {
+                    @foreach (var h in CurrentTaskHistory.OrderByDescending(x => x.CreatedAt))
+                    {
+                        var user = AllProfiles.FirstOrDefault(p => p.Id.ToString() == h.ChangedBy?.ToString());
+                        var oldSt = Statuses.FirstOrDefault(s => s.Id == h.OldStatusId);
+                        var newSt = Statuses.FirstOrDefault(s => s.Id == h.NewStatusId);
+
+                        <div class="timeline-item">
+                            <div class="timeline-dot"></div>
+                            <div class="timeline-content">
+                                <div class="timeline-header">
+                                    <strong>@(user?.FullName ?? "Неизвестный")</strong>
+                                    <span class="timeline-date">@h.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                </div>
+                                <div class="timeline-body">
+                                    Изменен статус: 
+                                    <span class="status-badge" style="color: @(oldSt?.HexColor ?? "gray"); border-color: @(oldSt?.HexColor ?? "gray")">@(oldSt?.Name ?? "Создана")</span>
+                                    <i class="fa-solid fa-arrow-right" style="margin: 0 5px; font-size: 10px; color: gray;"></i>
+                                    <span class="status-badge" style="color: @(newSt?.HexColor ?? "white"); border-color: @(newSt?.HexColor ?? "white")">@(newSt?.Name ?? "?")</span>
+                                    @if (!string.IsNullOrEmpty(h.Comment))
+                                    {
+                                        <div class="timeline-comment-text" style="width: 100%; margin-top: 8px; color: #aaa; font-style: italic; font-size: 12px; background: rgba(255,255,255,0.02); padding: 6px 10px; border-radius: 6px;">
+                                            “@h.Comment”
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="modal-actions" style="margin-top: 20px;">
+                <button class="btn-cancel" style="width: 100%;" @onclick="() => IsHistoryModalOpen = false">Закрыть</button>
+            </div>
+        </div>
+    </div>
+}
+
+
+@code {
+    private bool IsLoading = true;
+    private bool HasTaskAccess = false;
+
+    private List<Ticket> Tickets = new();
+    private List<TicketStatus> Statuses = new();
+    private List<TicketPriority> Priorities = new();
+    private List<StadiumZone> Zones = new();
+    private List<SmartArena.Models.Profile> AllProfiles = new();
+    private List<SmartArena.Models.Profile> ExecutableProfiles = new();
+
+    private string SearchText = "";
+    private int FilterStatusId = 0;
+    private int FilterPriorityId = 0;
+
+    private string ZoneSearchText = "";
+    private string AssigneeSearchText = "";
+
+    private IEnumerable<StadiumZone> FilteredZones => string.IsNullOrWhiteSpace(ZoneSearchText)
+        ? Zones : Zones.Where(z => z.Name.Contains(ZoneSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private IEnumerable<SmartArena.Models.Profile> FilteredAssignees => string.IsNullOrWhiteSpace(AssigneeSearchText)
+        ? ExecutableProfiles : ExecutableProfiles.Where(p => p.FullName.Contains(AssigneeSearchText, StringComparison.OrdinalIgnoreCase));
+
+    private bool IsFilterStatusOpen = false;
+    private bool IsFilterPriorityOpen = false;
+
+    private bool IsModalStatusOpen = false;
+    private bool IsModalPriorityOpen = false;
+    private bool IsModalZoneOpen = false;
+    private bool IsModalAssigneeOpen = false;
+
+    private bool IsHistoryModalOpen = false;
+    private List<TicketHistory> CurrentTaskHistory = new();
+
+    private bool _canCreate;
+    private bool _canAssign;
+    private bool _canEditAny;
+    private bool _canVerify;
+
+    private bool IsModalOpen;
+    private bool IsNewTask;
+    private Ticket CurrentTask = new();
+    private string CurrentUserId = "";
+    private int? _originalStatusId;
+    private string? _originalAssigneeId; // Добавлено для отслеживания смены исполнителя
+    private string HistoryComment = string.Empty;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUserId = AuthService.CurrentUser?.Id ?? "";
+
+        if (string.IsNullOrEmpty(CurrentUserId))
+        {
+            HasTaskAccess = false;
+            IsLoading = false;
+            return;
+        }
+
+        _canCreate = await AuthService.UserHasPermissionAsync("ticket.create");
+        _canAssign = await AuthService.UserHasPermissionAsync("ticket.assign");
+        _canEditAny = await AuthService.UserHasPermissionAsync("ticket.edit_any");
+        _canVerify = await AuthService.UserHasPermissionAsync("ticket.verify");
+
+        bool canViewAll = await AuthService.UserHasPermissionAsync("ticket.view_all");
+        bool isExecutor = await AuthService.UserHasPermissionAsync("ticket.executor");
+
+        HasTaskAccess = _canCreate || _canAssign || _canEditAny || _canVerify || canViewAll || isExecutor;
+
+        if (HasTaskAccess) await LoadData();
+        IsLoading = false;
+    }
+
+    private async Task LoadData()
+    {
+        var tRes = await SupabaseService.Client.From<Ticket>().Get();
+        Tickets = tRes.Models.OrderByDescending(x => x.CreatedAt).ToList();
+
+        Statuses = (await SupabaseService.Client.From<TicketStatus>().Get()).Models.OrderBy(s => s.Id).ToList();
+        Priorities = (await SupabaseService.Client.From<TicketPriority>().Get()).Models.OrderByDescending(p => p.Weight).ToList();
+        Zones = (await SupabaseService.Client.From<StadiumZone>().Get()).Models.OrderBy(z => z.Name).ToList();
+
+        var pRes = await SupabaseService.Client.From<SmartArena.Models.Profile>().Get();
+        AllProfiles = pRes.Models;
+
+        var rpcResponse = await SupabaseService.Client.Rpc("get_executor_ids", null);
+        if (rpcResponse != null && !string.IsNullOrEmpty(rpcResponse.Content))
+        {
+            var execIds = Newtonsoft.Json.JsonConvert.DeserializeObject<List<string>>(rpcResponse.Content) ?? new List<string>();
+            ExecutableProfiles = AllProfiles
+                .Where(p => p.IsActive && execIds.Contains(p.Id.ToString(), StringComparer.OrdinalIgnoreCase))
+                .OrderBy(p => p.FullName)
+                .ToList();
+        }
+    }
+
+    private IEnumerable<Ticket> FilteredTickets => Tickets
+        .Where(t => (string.IsNullOrEmpty(SearchText) || t.Title.Contains(SearchText, StringComparison.OrdinalIgnoreCase)) &&
+                    (FilterStatusId == 0 || t.StatusId == FilterStatusId) &&
+                    (FilterPriorityId == 0 || t.PriorityId == FilterPriorityId));
+
+    private TicketStatus? CurrentStatus => Statuses.FirstOrDefault(s => s.Id == CurrentTask.StatusId);
+    private TicketPriority? CurrentPriority => Priorities.FirstOrDefault(p => p.Id == CurrentTask.PriorityId);
+
+    private bool IsExecutor => CurrentTask.AssigneeId?.ToString() == CurrentUserId;
+    private bool IsCreator => CurrentTask.CreatorId?.ToString() == CurrentUserId;
+
+    private bool CanEditCore => IsNewTask || _canEditAny || (IsCreator && _canCreate);
+    private bool HasAssignPermission => _canAssign || _canEditAny;
+    private bool CanChangeStatus => _canEditAny || IsCreator || IsExecutor || _canVerify;
+    private bool CanSave => IsNewTask || CanEditCore || HasAssignPermission || IsExecutor;
+
+    private void OpenCreateModal()
+    {
+        CloseAllModalDropdowns();
+        IsNewTask = true;
+        HistoryComment = string.Empty;
+        CurrentTask = new Ticket
+        {
+            StatusId = Statuses.FirstOrDefault()?.Id ?? 1,
+            PriorityId = Priorities.FirstOrDefault()?.Id ?? 1,
+            CreatorId = CurrentUserId,
+            CreatedAt = DateTime.UtcNow
+        };
+        _originalStatusId = null;
+        _originalAssigneeId = null;
+        IsModalOpen = true;
+    }
+
+    private void OpenDetailsModal(Ticket task)
+    {
+        CloseAllModalDropdowns();
+        IsNewTask = false;
+        CurrentTask = task;
+        _originalStatusId = task.StatusId;
+        _originalAssigneeId = task.AssigneeId?.ToString();
+        HistoryComment = string.Empty;
+        IsModalOpen = true;
+    }
+
+    private async Task OpenHistoryModal(Ticket task)
+    {
+        IsHistoryModalOpen = true;
+        string targetId = task.Id.ToString();
+        var response = await SupabaseService.Client.From<TicketHistory>()
+            .Filter("ticket_id", Supabase.Postgrest.Constants.Operator.Equals, targetId)
+            .Get();
+
+        CurrentTaskHistory = response.Models;
+    }
+
+    private async Task SaveTask()
+    {
+        if (string.IsNullOrWhiteSpace(CurrentTask.Title))
+        {
+            await AlertService.ShowAlertAsync("Внимание", "Заголовок не может быть пустым", "OK");
+            return;
+        }
+
+        CurrentTask.UpdatedAt = DateTime.UtcNow;
+
+        var newStatus = Statuses.FirstOrDefault(s => s.Id == CurrentTask.StatusId);
+        var oldStatus = Statuses.FirstOrDefault(s => s.Id == _originalStatusId);
+
+        bool isClosedStatus = newStatus?.Name.Contains("Закрыт", StringComparison.OrdinalIgnoreCase) == true;
+
+        if (isClosedStatus && _originalStatusId != CurrentTask.StatusId)
+        {
+            CurrentTask.ClosedAt = DateTime.UtcNow;
+            if (IsCreator || _canVerify) CurrentTask.VerifiedAt = DateTime.UtcNow;
+        }
+        else if (!isClosedStatus)
+        {
+            CurrentTask.ClosedAt = null;
+            CurrentTask.VerifiedAt = null;
+        }
+
+        try
+        {
+            // Формируем payload для навигации
+            string payloadJson = $"{{\"ticket_id\": \"{CurrentTask.Id}\", \"action\": \"open_details\"}}";
+
+            if (IsNewTask)
+            {
+                var response = await SupabaseService.Client.From<Ticket>().Insert(CurrentTask);
+                var createdTask = response.Models.FirstOrDefault();
+
+                if (createdTask != null)
+                {
+                    await SupabaseService.Client.From<TicketHistory>().Insert(new TicketHistory
+                    {
+                        TicketId = createdTask.Id.ToString(),
+                        ChangedBy = CurrentUserId,
+                        NewStatusId = createdTask.StatusId,
+                        Comment = HistoryComment,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    // УВЕДОМЛЕНИЕ: Новая задача назначена исполнителю
+                    if (!string.IsNullOrEmpty(CurrentTask.AssigneeId?.ToString()) && CurrentTask.AssigneeId.ToString() != CurrentUserId)
+                    {
+                        await SupabaseService.Client.From<Notification>().Insert(new Notification
+                        {
+                            UserId = CurrentTask.AssigneeId.ToString()!,
+                            Title = "Новая задача",
+                            Body = $"Вам назначена новая задача: {CurrentTask.Title}",
+                            Type = "ticket_assigned",
+                            Payload = payloadJson,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+            else
+            {
+                await SupabaseService.Client.From<Ticket>().Update(CurrentTask);
+
+                // УВЕДОМЛЕНИЕ: Смена исполнителя
+                if (CurrentTask.AssigneeId?.ToString() != _originalAssigneeId && !string.IsNullOrEmpty(CurrentTask.AssigneeId?.ToString()) && CurrentTask.AssigneeId.ToString() != CurrentUserId)
+                {
+                    await SupabaseService.Client.From<Notification>().Insert(new Notification
+                    {
+                        UserId = CurrentTask.AssigneeId.ToString()!,
+                        Title = "Назначение задачи",
+                        Body = $"Вас назначили исполнителем задачи: {CurrentTask.Title}",
+                        Type = "ticket_assigned",
+                        Payload = payloadJson,
+                        CreatedAt = DateTime.UtcNow
+                    });
+                }
+
+                if (_originalStatusId != CurrentTask.StatusId)
+                {
+                    await SupabaseService.Client.From<TicketHistory>().Insert(new TicketHistory
+                    {
+                        TicketId = CurrentTask.Id.ToString(),
+                        ChangedBy = CurrentUserId,
+                        OldStatusId = _originalStatusId,
+                        NewStatusId = CurrentTask.StatusId,
+                        Comment = HistoryComment,
+                        CreatedAt = DateTime.UtcNow
+                    });
+
+                    // УВЕДОМЛЕНИЕ: Отправка на проверку (Создателю)
+                    bool isNewReview = newStatus?.Name.Contains("проверк", StringComparison.OrdinalIgnoreCase) == true;
+                    if (isNewReview && !string.IsNullOrEmpty(CurrentTask.CreatorId?.ToString()) && CurrentTask.CreatorId.ToString() != CurrentUserId)
+                    {
+                        await SupabaseService.Client.From<Notification>().Insert(new Notification
+                        {
+                            UserId = CurrentTask.CreatorId.ToString()!,
+                            Title = "Задача на проверке",
+                            Body = $"Исполнитель перевел задачу «{CurrentTask.Title}» на проверку.",
+                            Type = "ticket_verified",
+                            Payload = payloadJson,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+
+                    // УВЕДОМЛЕНИЕ: Возврат в работу из закрытого статуса (Исполнителю)
+                    bool wasClosed = oldStatus?.Name.Contains("Закрыт", StringComparison.OrdinalIgnoreCase) == true;
+                    bool isNowOpenOrProgress = newStatus?.Name.Contains("Открыт", StringComparison.OrdinalIgnoreCase) == true || newStatus?.Name.Contains("В работе", StringComparison.OrdinalIgnoreCase) == true;
+
+                    if (wasClosed && isNowOpenOrProgress && !string.IsNullOrEmpty(CurrentTask.AssigneeId?.ToString()) && CurrentTask.AssigneeId.ToString() != CurrentUserId)
+                    {
+                        await SupabaseService.Client.From<Notification>().Insert(new Notification
+                        {
+                            UserId = CurrentTask.AssigneeId.ToString()!,
+                            Title = "Задача возвращена в работу",
+                            Body = $"Задача «{CurrentTask.Title}» возвращена со статусом: {newStatus?.Name}.",
+                            Type = "ticket_assigned",
+                            Payload = payloadJson,
+                            CreatedAt = DateTime.UtcNow
+                        });
+                    }
+                }
+            }
+
+            IsModalOpen = false;
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            await AlertService.ShowAlertAsync("Ошибка доступа", "Нарушены правила: " + ex.Message, "OK");
+        }
+    }
+
+    private void CloseAllFilterDropdowns() { IsFilterStatusOpen = false; IsFilterPriorityOpen = false; }
+    private void ToggleFilterStatus() { IsFilterStatusOpen = !IsFilterStatusOpen; IsFilterPriorityOpen = false; }
+    private void ToggleFilterPriority() { IsFilterPriorityOpen = !IsFilterPriorityOpen; IsFilterStatusOpen = false; }
+
+    private void CloseAllModalDropdowns() { IsModalStatusOpen = false; IsModalPriorityOpen = false; IsModalZoneOpen = false; IsModalAssigneeOpen = false; }
+    private void ToggleModalDropdown(ref bool dropdownState)
+    {
+        bool currentState = dropdownState;
+        CloseAllModalDropdowns();
+        dropdownState = !currentState;
+    }
+
+    private string GetInitials(string? name) => string.IsNullOrWhiteSpace(name) ? "?" : name[0].ToString().ToUpper();
+}
