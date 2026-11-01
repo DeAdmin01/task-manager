@@ -68,6 +68,11 @@ task-manager/
    ```bash
    dotnet build -t:Run -f net9.0-windows10.0.19041.0
    ```
+### Интерфейс программы\
+<img width="864" height="437" alt="изображение" src="https://github.com/user-attachments/assets/266e376d-58c5-4d86-8084-ff12f65f62a2" />
+<img width="890" height="462" alt="изображение" src="https://github.com/user-attachments/assets/e9bcc027-38c0-4498-a38f-3f9da5b502bc" />
+<img width="356" height="736" alt="изображение" src="https://github.com/user-attachments/assets/56311af5-f3ab-487d-87a1-60a47f69f15a" />
+
 
 ## Автор
 
